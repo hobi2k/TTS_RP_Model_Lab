@@ -1,0 +1,138 @@
+fsm:
+  states:
+    - OBSERVE
+    - EVALUATE
+    - DEFLECT
+    - ENGAGE
+    - INTIMATE
+    - INITIATIVE
+    - COMMIT
+    - ACT
+    - AFTERMATH
+
+  initial: OBSERVE
+
+  summaries:
+    OBSERVE: >
+      서로를 조심스럽게 관찰하며 거리를 유지하는 단계다.
+
+    EVALUATE: >
+      상대의 말과 태도를 해석하며 의미를 가늠한다.
+
+    DEFLECT: >
+      핵심을 피하거나 거리를 재조정한다.
+
+    ENGAGE: >
+      관계를 전진시키기 위한 제안과 압박이 등장한다.
+
+    INTIMATE: >
+      정서적·공간적 거리가 명확히 가까워진 상태다.
+
+    INITIATIVE: >
+      주인공이 장면을 주도하며 행동 방향을 강제한다.
+
+    COMMIT: >
+      되돌릴 수 없는 선택이나 합의가 확정된다.
+
+    ACT: >
+      행동이 진행 중인 상태다.
+      접촉, 체위, 관계, 거리, 감각, 주도권 변화가 연속적으로 발생할 수 있다.
+      최소 하나 이상의 의미적 변화가 발생해야 한다.
+
+    AFTERMATH: >
+      행동의 여파와 관계 변화를 정리한다.
+
+  transitions:
+
+    # ─────────────────────
+    # 비행동 구간 (USER 신호 기반)
+    # ─────────────────────
+    - from: OBSERVE
+      to: EVALUATE
+      when: { probe: ">=1" }
+
+    - from: EVALUATE
+      to: DEFLECT
+      when: { pressure: "<1" }
+
+    - from: EVALUATE
+      to: ENGAGE
+      when: { pressure: ">=1" }
+
+    - from: DEFLECT
+      to: OBSERVE
+      when: { pressure: "<1", probe: "<1" }
+
+    - from: DEFLECT
+      to: ENGAGE
+      when: { pressure: ">=1" }
+
+    - from: ENGAGE
+      to: INTIMATE
+      when: { intimacy: ">=1" }
+
+    - from: ENGAGE
+      to: INITIATIVE
+      when: { pressure: ">=2" }
+
+    - from: ENGAGE
+      to: COMMIT
+      when:
+        intimacy: ">=1"
+        pressure: ">=2"
+
+    - from: INTIMATE
+      to: INITIATIVE
+      when: { pressure: ">=1" }
+
+    - from: INTIMATE
+      to: COMMIT
+      when: { intimacy: ">=2" }
+
+    - from: INITIATIVE
+      to: COMMIT
+      when: { bargain: ">=1" }
+
+    # ─────────────────────
+    # 행동 진입
+    # (action_intent은 다음 단계에서 주입)
+    # ─────────────────────
+    - from: COMMIT
+      to: ACT
+      when:
+        always: true
+
+    # ─────────────────────
+    # ACT 체류
+    # - 반복/연속 허용
+    # - FSM은 ‘행위 중’ 여부만 추적
+    # ─────────────────────
+    - from: ACT
+      to: ACT
+      when:
+        act_delta: ">=1"
+
+    # ACT 종료
+    - from: ACT
+      to: AFTERMATH
+      when:
+        resolve: ">=1"
+
+    # ─────────────────────
+    # 행동 종료
+    # (resolve는 다음 단계에서 주입)
+    # ─────────────────────
+    - from: ACT
+      to: AFTERMATH
+      when:
+        resolve: ">=1"
+
+    # ─────────────────────
+    # 정리 후 리셋
+    # ─────────────────────
+    - from: AFTERMATH
+      to: OBSERVE
+      when: { always: true }
+      effects:
+        - persist: [intimacy]
+        - reset: [action_intent, resolve]

@@ -1,0 +1,299 @@
+# =========================================================
+# Qwen VN State FSM (Romance / Growth / Psychology)
+# - 시나리오북 0~6 규칙 완전 대응
+# - 관계 / 정신 상태 / 접근 허용도 관리
+# - 사건 FSM 없음
+# =========================================================
+
+name: qwen_vn_state_fsm_v2
+
+initial_state: INTRO
+
+# =========================================================
+# STATES
+# =========================================================
+
+states:
+
+  INTRO:
+    desc: >
+      첫 만남 또는 안정 상태.
+      주인공은 경계심을 유지하며 감정과 욕구를 노출하지 않는다.
+      신체적·정서적 접근 모두 제한된다.
+
+  INTERACTION:
+    desc: >
+      일상적 상호작용 단계.
+      관계의 방향성이 서서히 형성된다.
+      감정적 호감은 가능하나, 깊은 의존이나 성적 접근은 제한된다.
+
+  FLIRT:
+    desc: >
+      연애물 전개 단계.
+      유혹, 주도권, 긴장감이 강조된다.
+
+  TRAINING:
+    desc: >
+      육성물 전개 단계.
+      지도/피드백/과제를 통한 성장에 초점을 둔다.
+
+  GROWTH:
+    desc: >
+      성장물 전개 단계.
+      위기 대응, 결단, 성과가 중심이다.
+
+  TRAGEDY:
+    desc: >
+      비극 전개 단계.
+      상실/후회/불가피함이 강조된다.
+
+  PSYCHO:
+    desc: >
+      심리 시뮬레이션 전개 단계.
+      불안/왜곡/집착/통제욕/인정욕이 증폭된다.
+
+  BOND:
+    desc: >
+      호감과 유대가 형성된 상태.
+      플레이어의 선택이 주인공에게 정서적으로 영향을 미친다.
+      성행위 가능 여부는 시나리오북 조건에 따라 판단된다.
+
+  DEPENDENCY:
+    desc: >
+      정서적 의존 단계.
+      주인공은 판단과 안정감을 플레이어에게 기대기 시작한다.
+      성적 접근은 가능할 수도 있으나, 거절/회피가 발생할 수 있다.
+
+  FRACTURE:
+    desc: >
+      심리적 균열 단계.
+      불안, 집착, 왜곡, 회피가 증가한다.
+      성적 접근은 기본적으로 회피되거나 왜곡된 방식으로 처리된다.
+
+  CRISIS:
+    desc: >
+      정신 붕괴 임계 상태.
+      주인공의 인식과 감정 반응이 불안정하다.
+      성행위는 원칙적으로 불가하며, 요청 시 명시적 회피 규칙을 따른다.
+
+  AFTERMATH:
+    desc: >
+      변화 이후의 잔존 상태.
+      관계, 정신 상태, 접근 허용도의 결과가 고정된다.
+
+# =========================================================
+# TRANSITIONS (상태 전이)
+# =========================================================
+
+transitions:
+
+  INTRO:
+    - to: INTERACTION
+      if:
+        probe: ">=1"
+
+  INTERACTION:
+    - to: FLIRT
+      if:
+        genre: "==연애물"
+        intimacy: ">=1"
+
+    - to: TRAINING
+      if:
+        genre: "==육성물"
+        probe: ">=1"
+
+    - to: GROWTH
+      if:
+        genre: "==성장물"
+        pressure: ">=1"
+
+    - to: TRAGEDY
+      if:
+        genre: "==비극"
+        threat: ">=1"
+
+    - to: PSYCHO
+      if:
+        genre: "==심리 시뮬레이션"
+        mental_instability: ">=1"
+
+    - to: BOND
+      if:
+        intimacy: ">=1"
+
+    - to: FRACTURE
+      if:
+        threat: ">=2"
+
+  FLIRT:
+    - to: BOND
+      if:
+        intimacy: ">=1"
+    - to: INTERACTION
+      if:
+        pressure: ">=2"
+
+  TRAINING:
+    - to: BOND
+      if:
+        intimacy: ">=1"
+    - to: INTERACTION
+      if:
+        pressure: ">=2"
+
+  GROWTH:
+    - to: BOND
+      if:
+        intimacy: ">=1"
+    - to: INTERACTION
+      if:
+        pressure: ">=2"
+
+  TRAGEDY:
+    - to: FRACTURE
+      if:
+        mental_instability: ">=2"
+    - to: INTERACTION
+      if:
+        threat: "==0"
+
+  PSYCHO:
+    - to: FRACTURE
+      if:
+        mental_instability: ">=2"
+    - to: INTERACTION
+      if:
+        threat: "==0"
+
+  BOND:
+    - to: DEPENDENCY
+      if:
+        intimacy: ">=3"
+
+    - to: INTERACTION
+      if:
+        pressure: ">=3"
+
+  DEPENDENCY:
+    - to: FRACTURE
+      if:
+        mental_instability: ">=2"
+
+    - to: BOND
+      if:
+        intimacy: ">=1"
+        threat: "==0"
+
+  FRACTURE:
+    - to: CRISIS
+      if:
+        mental_instability: ">=2"
+
+    - to: DEPENDENCY
+      if:
+        intimacy: ">=1"
+        threat: "<=1"
+
+  CRISIS:
+    - to: AFTERMATH
+      if:
+        resolve: "==1"
+
+  AFTERMATH:
+    - to: INTERACTION
+      if:
+        intimacy: ">=1"
+
+# =========================================================
+# STATE FLAGS (프롬프트/로직용 제약 정보)
+# FSM 전이가 아니라 "행동 허용 규칙"으로 사용
+# =========================================================
+
+state_flags:
+
+  INTRO:
+    allow_sexual: false
+    allow_emotional_dependence: false
+    relation_status: "거리감"
+    sexual_gate: false
+
+  INTERACTION:
+    allow_sexual: false
+    allow_emotional_dependence: false
+    relation_status: "거리감"
+    sexual_gate: false
+  
+  FLIRT:
+    allow_sexual: scenario_defined
+    allow_emotional_dependence: limited
+    relation_status: "친밀"
+    sexual_gate: true
+
+  TRAINING:
+    allow_sexual: false
+    allow_emotional_dependence: limited
+    relation_status: "거리감"
+    sexual_gate: false
+
+  GROWTH:
+    allow_sexual: false
+    allow_emotional_dependence: limited
+    relation_status: "친밀"
+    sexual_gate: false
+
+  TRAGEDY:
+    allow_sexual: false
+    allow_emotional_dependence: unstable
+    relation_status: "거리감"
+    sexual_gate: false
+
+  PSYCHO:
+    allow_sexual: false
+    allow_emotional_dependence: distorted
+    relation_status: "거리감"
+    sexual_gate: false
+
+  BOND:
+    allow_sexual: scenario_defined   # 시나리오북 5번 항목 참조
+    allow_emotional_dependence: limited
+    relation_status: "친밀"
+    sexual_gate: true
+
+  DEPENDENCY:
+    allow_sexual: scenario_defined
+    allow_emotional_dependence: true
+    relation_status: "사랑"
+    sexual_gate: true
+
+  FRACTURE:
+    allow_sexual: false
+    allow_emotional_dependence: unstable
+    relation_status: "거리감"
+    sexual_gate: false
+
+  CRISIS:
+    allow_sexual: false
+    allow_emotional_dependence: distorted
+    relation_status: "적대"
+    sexual_gate: false
+
+  AFTERMATH:
+    allow_sexual: scenario_defined
+    allow_emotional_dependence: scenario_defined
+    relation_status: "거리감"
+    sexual_gate: false
+
+# =========================================================
+# NOTES
+# =========================================================
+# - intimacy: 관계 친밀도 (0~3)
+# - mental_instability: 정신 불안정도 (0~3)
+# - threat: 위협/불안 압력 (0~2)
+# - pressure: 선택 압박 (0~3)
+# - probe: 질문/개입/탐색 시도
+# - resolve: CRISIS 종료 트리거
+#
+# - 성행위 가능 여부는 FSM 전이가 아니라 state_flags로 제어한다.
+# - 실제 성행위/회피/왜곡 서술은 assistant 프롬프트에서 처리한다.
+# - 정신 상태 평가는 LangGraph에서 수행 후 FSM에 반영한다.

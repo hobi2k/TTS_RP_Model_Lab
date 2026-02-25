@@ -1,0 +1,145 @@
+# =========================================================
+# Qwen VN Action/Event FSM (separate from relationship/emotion)
+# =========================================================
+
+name: qwen_vn_action_fsm_v1
+
+initial_state: IDLE
+
+states:
+  IDLE:
+    desc: >
+      사건이 본격화되지 않은 상태. 일상/대기.
+
+  EVENT:
+    desc: >
+      사건/행동이 전개되는 상태. 구체 행동이나 사건이 발생한다.
+
+  CONFLICT:
+    desc: >
+      갈등/위험/충돌이 커지는 상태.
+
+  RESOLUTION:
+    desc: >
+      해결/결정/전환이 발생하는 상태.
+
+  AFTERMATH:
+    desc: >
+      여파/정리 단계. 결과가 반영된다.
+
+  SEXUAL_1:
+    desc: >
+      키스/신체 접촉을 시작하는 상태.
+  SEXUAL_2:
+    desc: >
+      탈의/밀착 강화 단계.
+  SEXUAL_3:
+    desc: >
+      신체 밀착/행위 고조 단계.
+  SEXUAL_4:
+    desc: >
+      절정/마무리 단계.
+
+  AFTERMATH_SEX_1:
+    desc: >
+      포용/키스/여운을 나누는 단계.
+  AFTERMATH_SEX_2:
+    desc: >
+      관계 변화 인식 및 감정 정리 단계.
+
+transitions:
+  IDLE:
+    - to: SEXUAL_1
+      if:
+        sexual_ready: "True"
+        event: ">=1"
+    - to: EVENT
+      if:
+        event: ">=1"
+    - to: CONFLICT
+      if:
+        threat: ">=2"
+
+  EVENT:
+    - to: SEXUAL_1
+      if:
+        sexual_ready: "True"
+    - to: CONFLICT
+      if:
+        threat: ">=2"
+    - to: RESOLUTION
+      if:
+        resolve: "==1"
+
+  CONFLICT:
+    - to: RESOLUTION
+      if:
+        resolve: "==1"
+    - to: AFTERMATH
+      if:
+        event: ">=2"
+
+  RESOLUTION:
+    - to: SEXUAL_1
+      if:
+        sexual_ready: "True"
+    - to: AFTERMATH
+      if:
+        event: ">=1"
+
+  AFTERMATH:
+    - to: IDLE
+      if:
+        pressure: "==0"
+        threat: "==0"
+
+  SEXUAL_1:
+    - to: SEXUAL_2
+      if:
+        event: ">=0"
+  SEXUAL_2:
+    - to: SEXUAL_3
+      if:
+        event: ">=0"
+  SEXUAL_3:
+    - to: SEXUAL_4
+      if:
+        event: ">=0"
+  SEXUAL_4:
+    - to: AFTERMATH_SEX_1
+      if:
+        event: ">=0"
+
+  AFTERMATH_SEX_1:
+    - to: AFTERMATH_SEX_2
+      if:
+        event: ">=0"
+  AFTERMATH_SEX_2:
+    - to: IDLE
+      if:
+        pressure: "==0"
+        threat: "==0"
+
+state_flags:
+  IDLE:
+    action_hint: "일상/대기"
+  EVENT:
+    action_hint: "사건/행동 전개"
+  CONFLICT:
+    action_hint: "갈등/위험"
+  RESOLUTION:
+    action_hint: "해결/결정/전환"
+  AFTERMATH:
+    action_hint: "여파/정리"
+  SEXUAL_1:
+    action_hint: "키스/신체 접촉 시작"
+  SEXUAL_2:
+    action_hint: "탈의/신체 밀착"
+  SEXUAL_3:
+    action_hint: "신체 밀착/행위 고조"
+  SEXUAL_4:
+    action_hint: "절정/마무리"
+  AFTERMATH_SEX_1:
+    action_hint: "포용/키스/여운"
+  AFTERMATH_SEX_2:
+    action_hint: "관계 변화 인식/감정 정리"

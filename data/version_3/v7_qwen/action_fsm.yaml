@@ -1,0 +1,188 @@
+# =========================================================
+# Qwen VN Action FSM (v7 fast progression)
+# - 의미 있는 분기 유지
+# - sexual/crisis는 짧게 진입/전개/여파까지 빠르게 진행
+# =========================================================
+
+name: qwen_vn_action_fsm_v2
+
+initial_state: EVENT
+
+states:
+  IDLE:
+    desc: >
+      대기 상태.
+
+  EVENT:
+    desc: >
+      장면 진행 상태.
+
+  CONFLICT:
+    desc: >
+      갈등/위협이 전면화된 상태.
+
+  RESOLUTION:
+    desc: >
+      결정/해결 시도가 발생한 상태.
+
+  AFTERMATH:
+    desc: >
+      결과 정리 상태.
+
+  CRISIS_1:
+    desc: >
+      위기 초입.
+
+  CRISIS_2:
+    desc: >
+      위기 심화.
+
+  AFTERMATH_CRISIS_1:
+    desc: >
+      위기 여파 정리.
+
+  SEXUAL_1:
+    desc: >
+      접촉/밀착 시작.
+
+  SEXUAL_2:
+    desc: >
+      접촉 심화.
+
+  SEXUAL_3:
+    desc: >
+      행위 고조.
+
+  SEXUAL_4:
+    desc: >
+      절정/마무리.
+
+  AFTERMATH_SEX_1:
+    desc: >
+      성행위 여운 정리.
+
+  AFTERMATH_SEX_2:
+    desc: >
+      관계 정리 및 다음 행동 준비.
+
+transitions:
+  IDLE:
+    - to: SEXUAL_1
+      if:
+        sexual_ready: "True"
+    - to: CRISIS_1
+      if:
+        mental_instability: ">=2"
+    - to: EVENT
+      if:
+        event: ">=0"
+
+  EVENT:
+    - to: SEXUAL_1
+      if:
+        sexual_ready: "True"
+    - to: CRISIS_1
+      if:
+        mental_instability: ">=2"
+    - to: CONFLICT
+      if:
+        threat: ">=1"
+    - to: RESOLUTION
+      if:
+        event: ">=1"
+
+  CONFLICT:
+    - to: CRISIS_1
+      if:
+        mental_instability: ">=2"
+    - to: RESOLUTION
+      if:
+        resolve: ">=1"
+    - to: AFTERMATH
+      if:
+        event: ">=1"
+
+  RESOLUTION:
+    - to: AFTERMATH
+      if:
+        event: ">=0"
+
+  AFTERMATH:
+    - to: EVENT
+      if:
+        event: ">=0"
+
+  CRISIS_1:
+    - to: CRISIS_2
+      if:
+        event: ">=0"
+
+  CRISIS_2:
+    - to: AFTERMATH_CRISIS_1
+      if:
+        event: ">=0"
+
+  AFTERMATH_CRISIS_1:
+    - to: EVENT
+      if:
+        event: ">=0"
+
+  SEXUAL_1:
+    - to: SEXUAL_2
+      if:
+        event: ">=0"
+
+  SEXUAL_2:
+    - to: SEXUAL_3
+      if:
+        event: ">=0"
+
+  SEXUAL_3:
+    - to: SEXUAL_4
+      if:
+        event: ">=0"
+
+  SEXUAL_4:
+    - to: AFTERMATH_SEX_1
+      if:
+        event: ">=0"
+
+  AFTERMATH_SEX_1:
+    - to: AFTERMATH_SEX_2
+      if:
+        event: ">=0"
+
+  AFTERMATH_SEX_2:
+    - to: EVENT
+      if:
+        event: ">=0"
+
+state_flags:
+  IDLE:
+    action_hint: "대기"
+  EVENT:
+    action_hint: "장면 진행"
+  CONFLICT:
+    action_hint: "갈등/위협"
+  RESOLUTION:
+    action_hint: "해결/결정"
+  AFTERMATH:
+    action_hint: "결과 정리"
+  CRISIS_1:
+    action_hint: "위기 초입"
+  CRISIS_2:
+    action_hint: "위기 심화"
+  AFTERMATH_CRISIS_1:
+    action_hint: "위기 여파 정리"
+  SEXUAL_1:
+    action_hint: "접촉/밀착 시작"
+  SEXUAL_2:
+    action_hint: "접촉 심화"
+  SEXUAL_3:
+    action_hint: "행위 고조"
+  SEXUAL_4:
+    action_hint: "절정/마무리"
+  AFTERMATH_SEX_1:
+    action_hint: "여운 정리"
+  AFTERMATH_SEX_2:
+    action_hint: "관계 정리/다음 준비"

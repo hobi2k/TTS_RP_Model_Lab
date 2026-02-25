@@ -1,15 +1,40 @@
 [project]
 name = "saya-char-qwen2-5"
 version = "0.1.0"
-description = "Qwen2 architecture study & custom implementation"
+description = "Qwen + Vision + Multimodal Research"
 requires-python = ">=3.10,<3.12"
 
 dependencies = [
+    # ===== Core =====
+    "numpy<2",
+    "typing-extensions",
+    "python-dotenv",
+
+    # ===== LLM / data =====
     "transformers>=4.40",
     "accelerate>=0.27",
+    "peft",
     "safetensors>=0.4",
     "einops>=0.7",
     "sentencepiece",
-    "numpy",
-    "typing-extensions",
+    "datasets>=2.19",
+    "trl>=0.8",
+    "langchain-core>=0.3",
+    "langgraph>=0.2",
+    "pyyaml>=6.0",
+    "scikit-learn>=1.4",
+    "huggingface_hub>=0.24",
+    "openai>=1.40",
+    "tqdm>=4.66",
 ]
+
+[project.optional-dependencies]
+# RTX 50xx 등 환경 차이를 고려해 torch 계열은 기본 설치에서 분리한다.
+torch = [
+    "torch",
+    "torchvision",
+    "torchaudio",
+]
+
+[tool.uv]
+reinstall = false

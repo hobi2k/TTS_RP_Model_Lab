@@ -1,0 +1,219 @@
+# =========================================================
+# Qwen VN State FSM (v7 fast progression)
+# - 장르별 진입을 즉시 보장
+# - 3턴 중심 전개를 위해 상태 전이를 단순화
+# - 관계/심리/성행위 게이트를 의미 있게 유지
+# =========================================================
+
+name: qwen_vn_state_fsm_v3
+
+initial_state: INTERACTION
+
+states:
+  INTERACTION:
+    desc: >
+      시작 직후 상호작용 상태. 장르별 핵심 국면으로 즉시 진입한다.
+
+  FLIRT:
+    desc: >
+      연애물 핵심 상태. 고백, 유혹, 감정 확인이 빠르게 진행된다.
+
+  TRAINING:
+    desc: >
+      육성물 핵심 상태. 지도, 과제, 피드백 반영이 중심이다.
+
+  ADULT:
+    desc: >
+      성인물 핵심 상태. 동의, 경계, 신체 접촉과 관능 전개를 다룬다.
+
+  TRAGEDY:
+    desc: >
+      비극 핵심 상태. 상실, 후회, 희생 선택이 중심이다.
+
+  PSYCHO:
+    desc: >
+      심리 시뮬레이션 핵심 상태. 불안/집착/통제욕/현실 왜곡이 드러난다.
+
+  BOND:
+    desc: >
+      관계 상승 상태. 상호 신뢰와 정서 교류가 강화된다.
+
+  DEPENDENCY:
+    desc: >
+      밀접 상태. 감정 의존 또는 강한 결속이 드러난다.
+
+  FRACTURE:
+    desc: >
+      균열 상태. 갈등, 위협, 불안정이 관계를 압박한다.
+
+  CRISIS:
+    desc: >
+      붕괴 임계 상태. 판단과 감정의 안정이 무너진 상태다.
+
+  AFTERMATH:
+    desc: >
+      여파 정리 상태. 이번 국면의 결과를 고정하고 다음 행동을 준비한다.
+
+transitions:
+  INTERACTION:
+    - to: FLIRT
+      if:
+        genre: "==연애물"
+        probe: ">=0"
+    - to: TRAINING
+      if:
+        genre: "==육성물"
+        probe: ">=0"
+    - to: ADULT
+      if:
+        genre: "==성인물"
+        probe: ">=0"
+    - to: TRAGEDY
+      if:
+        genre: "==비극"
+        probe: ">=0"
+    - to: PSYCHO
+      if:
+        genre: "==심리 시뮬레이션"
+        probe: ">=0"
+
+  FLIRT:
+    - to: BOND
+      if:
+        intimacy: ">=1"
+    - to: FRACTURE
+      if:
+        pressure: ">=2"
+
+  TRAINING:
+    - to: BOND
+      if:
+        resolve: ">=1"
+    - to: FRACTURE
+      if:
+        pressure: ">=2"
+
+  ADULT:
+    - to: DEPENDENCY
+      if:
+        intimacy: ">=1"
+    - to: FRACTURE
+      if:
+        pressure: ">=2"
+
+  TRAGEDY:
+    - to: FRACTURE
+      if:
+        threat: ">=1"
+    - to: AFTERMATH
+      if:
+        resolve: ">=1"
+
+  PSYCHO:
+    - to: FRACTURE
+      if:
+        mental_instability: ">=1"
+    - to: AFTERMATH
+      if:
+        resolve: ">=1"
+
+  BOND:
+    - to: DEPENDENCY
+      if:
+        intimacy: ">=1"
+    - to: AFTERMATH
+      if:
+        resolve: ">=1"
+
+  DEPENDENCY:
+    - to: CRISIS
+      if:
+        mental_instability: ">=2"
+    - to: AFTERMATH
+      if:
+        resolve: ">=1"
+
+  FRACTURE:
+    - to: CRISIS
+      if:
+        mental_instability: ">=1"
+    - to: AFTERMATH
+      if:
+        resolve: ">=1"
+
+  CRISIS:
+    - to: AFTERMATH
+      if:
+        resolve: ">=0"
+
+  AFTERMATH:
+    - to: INTERACTION
+      if:
+        probe: ">=0"
+
+state_flags:
+  INTERACTION:
+    allow_sexual: false
+    allow_emotional_dependence: false
+    relation_status: "거리감"
+    sexual_gate: false
+
+  FLIRT:
+    allow_sexual: scenario_defined
+    allow_emotional_dependence: limited
+    relation_status: "친밀"
+    sexual_gate: true
+
+  TRAINING:
+    allow_sexual: false
+    allow_emotional_dependence: limited
+    relation_status: "거리감"
+    sexual_gate: false
+
+  ADULT:
+    allow_sexual: scenario_defined
+    allow_emotional_dependence: true
+    relation_status: "친밀"
+    sexual_gate: true
+
+  TRAGEDY:
+    allow_sexual: false
+    allow_emotional_dependence: unstable
+    relation_status: "거리감"
+    sexual_gate: false
+
+  PSYCHO:
+    allow_sexual: false
+    allow_emotional_dependence: distorted
+    relation_status: "거리감"
+    sexual_gate: false
+
+  BOND:
+    allow_sexual: scenario_defined
+    allow_emotional_dependence: limited
+    relation_status: "친밀"
+    sexual_gate: true
+
+  DEPENDENCY:
+    allow_sexual: scenario_defined
+    allow_emotional_dependence: true
+    relation_status: "사랑"
+    sexual_gate: true
+
+  FRACTURE:
+    allow_sexual: false
+    allow_emotional_dependence: unstable
+    relation_status: "거리감"
+    sexual_gate: false
+
+  CRISIS:
+    allow_sexual: false
+    allow_emotional_dependence: distorted
+    relation_status: "적대"
+    sexual_gate: false
+
+  AFTERMATH:
+    allow_sexual: scenario_defined
+    allow_emotional_dependence: scenario_defined
+    relation_status: "거리감"
+    sexual_gate: false
