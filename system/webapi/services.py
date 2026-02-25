@@ -35,12 +35,8 @@ class RuntimeServices:
             str(project_root / "models" / "qwen3_core" / "model_assets" / "saya_rp_4b"),
         )
         self.trans_base = os.getenv(
-            "TRANS_BASE_DIR",
-            str(project_root / "models" / "qwen3_core" / "model_assets" / "qwen3-1.7b-base"),
-        )
-        self.trans_lora = os.getenv(
-            "TRANS_LORA_DIR",
-            str(project_root / "models" / "qwen3_core" / "model_assets" / "qwen3_1.7_ko2ja_lora" / "lora_adapter"),
+            "TRANS_MODEL_DIR",
+            str(project_root / "models" / "qwen3_core" / "model_assets" / "qtranslator_1.7b"),
         )
 
     def _ensure_llm(self):
@@ -73,8 +69,7 @@ class RuntimeServices:
                 from system.translator import KoJaTranslator
 
                 self._translator = KoJaTranslator(
-                    base_model_dir=self.trans_base,
-                    lora_dir=self.trans_lora,
+                    model_dir=self.trans_base,
                 )
         return self._translator
 
@@ -102,6 +97,27 @@ class RuntimeServices:
                 self._ensure_llm(),
                 SummaryMemoryConfig(enabled=True, update_every_turns=1, max_summary_chars=900),
             )
+
+    def _infer_emotion(self, user_text: str, narration: str, dialogue_ko: str) -> dict[str, int]:
+        text = f"{user_text} {narration} {dialogue_ko}".strip()
+        if not text:
+            return {"neutral": 1, "sad": 0, "happy": 0, "angry": 0}
+
+        sad_kw = ("슬퍼", "울", "눈물", "외로", "힘들", "아파", "불안", "우울", "미안", "실망", "기대했")
+        happy_kw = ("좋아", "행복", "웃", "기뻐", "반가", "신나", "즐거", "설레")
+        angry_kw = ("화나", "짜증", "분노", "빡", "싫어", "미워", "그만", "닥쳐", "거짓말")
+
+        score_sad = sum(1 for k in sad_kw if k in text)
+        score_happy = sum(1 for k in happy_kw if k in text)
+        score_angry = sum(1 for k in angry_kw if k in text)
+
+        if score_angry > 0 and score_angry >= max(score_sad, score_happy):
+            return {"neutral": 0, "sad": 0, "happy": 0, "angry": 1}
+        if score_sad > 0 and score_sad >= score_happy:
+            return {"neutral": 0, "sad": 1, "happy": 0, "angry": 0}
+        if score_happy > 0:
+            return {"neutral": 0, "sad": 0, "happy": 1, "angry": 0}
+        return {"neutral": 1, "sad": 0, "happy": 0, "angry": 0}
 
     def chat(self, text: str, max_new_tokens: int, temperature: float, top_p: float, top_k: int) -> str:
         # main_loop와 동일한 prompt/history/memory 경로를 사용한다.
@@ -193,6 +209,7 @@ class RuntimeServices:
             if dialogue_ko:
                 dialogue_ja = translator.translate(dialogue_ko)
                 wav_path = self.tts(dialogue_ja, style_index=style_index, style_weight=style_weight)
+            emotion = self._infer_emotion(text_ko, rp.narration, dialogue_ko)
 
             # main_loop와 같은 history/memory 업데이트
             self._history.append({"role": "user", "content": text_ko})
@@ -209,4 +226,5 @@ class RuntimeServices:
                 "dialogue_ko": dialogue_ko,
                 "dialogue_ja": dialogue_ja,
                 "wav_path": wav_path,
+                "emotion": emotion,
             }

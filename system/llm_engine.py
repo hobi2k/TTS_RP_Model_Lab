@@ -7,6 +7,7 @@
 
 from dataclasses import dataclass
 from typing import Optional, List
+from pathlib import Path
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from peft import PeftModel
@@ -30,17 +31,23 @@ class QwenEngine:
 
     def __init__(
         self,
-        base_model_id: str = "/home/ahnhs2k/pytorch-demo/saya_char_qwen2.5/models/qwen3_core/model_assets/saya_rp_4b",
+        base_model_id: Optional[str] = None,
         lora_model_id: Optional[str] = None,
         dtype: torch.dtype = torch.float16,
         device_map: str = "auto",
         default_gen: Optional[GenerationConfig] = None,
     ) -> None:
         self.default_gen = default_gen or GenerationConfig()
+        project_root = Path(__file__).resolve().parents[1]
+        resolved_base_model_id = str(
+            Path(base_model_id)
+            if base_model_id is not None
+            else project_root / "models" / "qwen3_core" / "model_assets" / "saya_rp_4b"
+        )
 
         # 토크나이저 로드
         self.tokenizer = AutoTokenizer.from_pretrained(
-            base_model_id,
+            resolved_base_model_id,
             use_fast=False,
             trust_remote_code=True,
         )
@@ -50,7 +57,7 @@ class QwenEngine:
 
         # 베이스 모델 로드
         self.model = AutoModelForCausalLM.from_pretrained(
-            base_model_id,
+            resolved_base_model_id,
             torch_dtype=dtype,
             device_map=device_map,
             trust_remote_code=True,

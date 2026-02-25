@@ -1,5 +1,7 @@
 from __future__ import annotations
-
+"""
+uv run uvicorn system.webapi.app:app --host 0.0.0.0 --port 8000
+"""
 import os
 
 from fastapi import FastAPI, HTTPException

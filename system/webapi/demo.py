@@ -252,6 +252,36 @@ def _render_stage(record: dict[str, Any] | None, bg_b64: str, char_b64: str) -> 
     )
 
 
+def _normalize_emotion(raw: Any) -> dict[str, int]:
+    out = {"neutral": 1, "sad": 0, "happy": 0, "angry": 0}
+    if not isinstance(raw, dict):
+        return out
+    for key in out:
+        out[key] = 1 if int(raw.get(key, 0)) > 0 else 0
+    if sum(out.values()) == 0:
+        out["neutral"] = 1
+    if sum(out.values()) > 1:
+        # Ensure one-hot by priority: angry > sad > happy > neutral.
+        if out["angry"]:
+            return {"neutral": 0, "sad": 0, "happy": 0, "angry": 1}
+        if out["sad"]:
+            return {"neutral": 0, "sad": 1, "happy": 0, "angry": 0}
+        if out["happy"]:
+            return {"neutral": 0, "sad": 0, "happy": 1, "angry": 0}
+        return {"neutral": 1, "sad": 0, "happy": 0, "angry": 0}
+    return out
+
+
+def _pick_char_b64(emotion: dict[str, int], char_b64_map: dict[str, str]) -> str:
+    if emotion.get("angry", 0) == 1:
+        return char_b64_map["angry"]
+    if emotion.get("sad", 0) == 1:
+        return char_b64_map["sad"]
+    if emotion.get("happy", 0) == 1:
+        return char_b64_map["happy"]
+    return char_b64_map["neutral"]
+
+
 def _render_history(history: list[dict[str, Any]]) -> str:
     if not history:
         return "no turns yet"
@@ -264,14 +294,25 @@ def _render_history(history: list[dict[str, Any]]) -> str:
 
 
 def build_demo(base_url: str) -> gr.Blocks:
-    asset_path = Path(__file__).resolve().parent / "assets" / "neutral_full.png"
+    asset_neutral = Path(__file__).resolve().parent / "assets" / "neutral_full.png"
+    asset_sad = Path(__file__).resolve().parent / "assets" / "crying_full.png"
+    asset_happy = Path(__file__).resolve().parent / "assets" / "smile_full.png"
+    asset_angry = Path(__file__).resolve().parent / "assets" / "annoyed_full.png"
     dev_face_path = Path(__file__).resolve().parent / "assets" / "face_neutral.png"
     bg_path = Path(__file__).resolve().parent / "assets" / "background.jpg"
+    for p in [asset_neutral, asset_sad, asset_happy, asset_angry]:
+        if not p.exists():
+            raise FileNotFoundError(f"Required asset not found: {p}")
     if not dev_face_path.exists():
         raise FileNotFoundError(f"Required asset not found: {dev_face_path}")
     if not bg_path.exists():
         raise FileNotFoundError(f"Required asset not found: {bg_path}")
-    asset_b64 = base64.b64encode(asset_path.read_bytes()).decode("ascii")
+    char_b64_map = {
+        "neutral": base64.b64encode(asset_neutral.read_bytes()).decode("ascii"),
+        "sad": base64.b64encode(asset_sad.read_bytes()).decode("ascii"),
+        "happy": base64.b64encode(asset_happy.read_bytes()).decode("ascii"),
+        "angry": base64.b64encode(asset_angry.read_bytes()).decode("ascii"),
+    }
     dev_face_b64 = base64.b64encode(dev_face_path.read_bytes()).decode("ascii")
     bg_b64 = base64.b64encode(bg_path.read_bytes()).decode("ascii")
     dev_face_html = (
@@ -293,11 +334,13 @@ def build_demo(base_url: str) -> gr.Blocks:
             "narration": body.get("narration", ""),
             "dialogue_ko": body.get("dialogue_ko", ""),
             "dialogue_ja": body.get("dialogue_ja", ""),
+            "emotion": _normalize_emotion(body.get("emotion")),
         }
         new_history = (history or []) + [rec]
         wav_path = body.get("wav_path", None)
+        char_b64 = _pick_char_b64(rec["emotion"], char_b64_map)
         return (
-            _render_stage(rec, bg_b64=bg_b64, char_b64=asset_b64),
+            _render_stage(rec, bg_b64=bg_b64, char_b64=char_b64),
             wav_path,
             _render_history(new_history),
             body.get("rp_text", ""),
@@ -310,7 +353,7 @@ def build_demo(base_url: str) -> gr.Blocks:
 
     def reset_scene():
         return (
-            _render_stage(None, bg_b64=bg_b64, char_b64=asset_b64),
+            _render_stage(None, bg_b64=bg_b64, char_b64=char_b64_map["neutral"]),
             gr.skip(),
             "no turns yet",
             "",
@@ -352,7 +395,7 @@ def build_demo(base_url: str) -> gr.Blocks:
         )
 
         with gr.Group(elem_classes=["vn-root"], elem_id="vn-stage-host"):
-            stage_html = gr.HTML(_render_stage(None, bg_b64=bg_b64, char_b64=asset_b64))
+            stage_html = gr.HTML(_render_stage(None, bg_b64=bg_b64, char_b64=char_b64_map["neutral"]))
 
             with gr.Group(elem_id="vn-input-wrap"):
                 with gr.Row(elem_id="vn-input-row"):

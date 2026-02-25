@@ -52,9 +52,17 @@ class TurnRequest(BaseModel):
     style_weight: float = Field(default=1.0, ge=0.0, le=3.0)
 
 
+class EmotionState(BaseModel):
+    neutral: int = Field(default=1, ge=0, le=1)
+    sad: int = Field(default=0, ge=0, le=1)
+    happy: int = Field(default=0, ge=0, le=1)
+    angry: int = Field(default=0, ge=0, le=1)
+
+
 class TurnResponse(BaseModel):
     rp_text: str
     narration: str
     dialogue_ko: str
     dialogue_ja: str
     wav_path: str | None = None
+    emotion: EmotionState = Field(default_factory=EmotionState)
