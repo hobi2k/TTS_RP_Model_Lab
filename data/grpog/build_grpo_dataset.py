@@ -1,4 +1,10 @@
 """
+GRPO 데이터셋 생성기
+
+전제 조건:
+- 싱글턴 및 멀티턴 데이터셋이 생성되어 있어야 합니다.
+
+사용 예시:
 uv run data/grpog/build_grpo_dataset.py \
   --inputs /mnt/d/rp_data/v7/rp_datum_unite_cleaned.jsonl \
   --out_train /mnt/d/rp_data/grpo/grpo_train.jsonl \

@@ -564,3 +564,18 @@ litagin 쪽 pretrained를 그대로 사용하는 방식이 아니기 때문에
 3. `models/qwen3_core`: 번역 SFT -> infer 검증
 4. `models/sbv2_core`: TTS 학습/추론 -> (선택) ONNX 변환
 5. `main_loop.py` 또는 `sbv_runtime`로 통합 테스트
+
+## 8) References
+
+- Qwen (Alibaba Cloud) GitHub: https://github.com/QwenLM/Qwen3
+- Qwen (Alibaba Cloud) Hugging Face: https://huggingface.co/Qwen
+- Tri-7B (Trillion Labs) Hugging Face: https://huggingface.co/trillionlabs/Tri-7B
+- Embedding model (BAAI BGE-M3) Hugging Face: https://huggingface.co/BAAI/bge-m3
+- Style-Bert-VITS2 (base TTS pipeline) GitHub: https://github.com/litagin02/Style-Bert-VITS2
+
+## 9) Planned Work
+
+- 향후 성능 향상을 위해 `litagin02/Style-Bert-VITS2`의 original SBV 파이프라인을 복원할 예정입니다.
+- 그 위에 이 저장소에서 필요한 최소 확장만 유지합니다:
+- `worker` 기반 상주 실행 경로 추가
+- ONNX 전용 독립 런타임 추가
