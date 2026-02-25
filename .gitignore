@@ -205,3 +205,20 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Project artifacts: model weights/checkpoints/exports/audio
+*.wav
+*.pt
+*.pth
+*.ckpt
+*.bin
+*.safetensors
+*.onnx
+*.gguf
+
+# Local model asset directories
+models/**/model_assets/
+models/sbv2_core/bert/
+
+# Local docs (project-specific)
+docs/

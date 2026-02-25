@@ -1,0 +1,9 @@
+# Legacy compatibility set (kept for reproducibility)
+# If you don't need strict legacy behavior, use requirements.txt + manual torch install.
+
+-r requirements.txt
+
+# Legacy torch stack
+torch==2.1.2
+torchvision==0.16.2
+torchaudio==2.1.2
