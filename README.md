@@ -478,6 +478,15 @@ pip install -r requirements.txt
 uv run main_loop.py
 ```
 
+REST API + 데모 UI 실행:
+```bash
+uv run uvicorn system.webapi.app:app --host 0.0.0.0 --port 8000
+```
+
+접속:
+- OpenAPI: `http://127.0.0.1:8000/docs`
+- Gradio demo: `http://127.0.0.1:8000/demo`
+
 실행 흐름:
 1. `system/llm_engine.py`에서 RP 응답 생성
 2. `system/rp_parser.py`로 서술/대사 분리
