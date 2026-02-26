@@ -10,6 +10,20 @@ TTS 롤플레잉 모델 연구소는 다음 3개 축으로 구성된 실험 저�
 2. `models`: RP 모델, 번역 모델, 일본어 TTS 모델 학습 및 추론 테스트
 3. `system`: 위 모델들을 연결해 CLI 텍스트+음성 RP 플레이
 
+## Demonstration
+
+### Note
+
+- Qwen3 모델의 한국어 실력이 저조한 상태에서 시연되었습니다.
+- 처음 응답에서는 지연이 발생합니다.
+
+- [LLM + TTS 적용 비주얼노벨 앱 시연 영상](https://drive.google.com/file/d/1WokpNF1pRjvnZABVWxH2gdoGBVTnpEya/view?usp=sharing)
+
+## Architecture Docs
+
+- FastAPI + REST + Gradio 데모 구조: `system/webapi/api_architecture.md`
+- 메모리/감정 구조(SQLite + sqlite-vec): `memory_and_emotion.md`
+
 ## 0) 빠른 시작
 
 ### 0-1. 환경
@@ -491,16 +505,27 @@ uv run uvicorn system.webapi.app:app --host 0.0.0.0 --port 8000
 - OpenAPI: `http://127.0.0.1:8000/docs`
 - Gradio demo: `http://127.0.0.1:8000/demo`
 
-실행 흐름:
+REST 엔드포인트(현재):
+- `GET /health`
+- `POST /api/chat`
+- `POST /api/parse`
+- `POST /api/translate`
+- `POST /api/tts`
+- `POST /api/turn`
+- `POST /api/main-loop` (데모 기본 경로, `/api/turn`과 동일 파이프라인)
+
+실행 흐름(메인 루프):
 1. `system/llm_engine.py`에서 RP 응답 생성
 2. `system/rp_parser.py`로 서술/대사 분리
 3. `system/translator.py`로 KO->JA 번역
 4. `system/tts_worker_client.py`가 `models/sbv2_core/sbv2_worker.py`와 통신해 WAV 생성
-5. `ffplay`로 재생
+5. 감정 JSON(one-hot) 판정 후 UI 이미지 선택(웹)
+6. `ffplay`로 재생(CLI)
 
 필수:
 - `ffplay` 설치 필요 (`ffmpeg` 패키지)
 - `system/llm_engine.py`, `system/translator.py`, `models/sbv2_core/sbv2_worker.py`의 모델 경로가 현재 로컬 환경과 맞아야 함
+- 메모리 DB는 기본 `outputs/memory/memory.sqlite3`를 사용하며, sqlite-vec 로드 가능 시 벡터 검색이 자동 활성화됩니다.
 
 ## 5) 산출물 위치 정리
 
@@ -570,6 +595,27 @@ litagin 쪽 pretrained를 그대로 사용하는 방식이 아니기 때문에
 - 사용하려는 torch 빌드를 환경에서 명시 고정
 - `uv` 동기화 시 재설치가 일어나지 않도록 lock/의존성 정책 점검
 
+## 6-6. GRPO 실행 중 `max_prompt_length` 인자 오류
+에러 예시:
+- `TypeError: GRPOConfig.__init__() got an unexpected keyword argument 'max_prompt_length'`
+
+원인:
+- 설치된 `trl` 버전마다 `GRPOConfig` 지원 인자가 다름
+
+대응:
+- 현재 `models/qwen3_core/grpo_trainer.py`는 지원 인자만 자동 주입하도록 호환 처리되어 있습니다.
+- 미지원 인자는 경고 로그 후 자동 제외됩니다.
+
+## 6-7. `PYTORCH_CUDA_ALLOC_CONF` deprecate 경고
+경고 예시:
+- `PYTORCH_CUDA_ALLOC_CONF is deprecated, use PYTORCH_ALLOC_CONF instead`
+
+대응:
+- 다음처럼 최신 환경 변수를 사용하세요.
+```bash
+PYTORCH_ALLOC_CONF=expandable_segments:True uv run ...
+```
+
 ## 7) 권장 운영 순서
 
 1. `data`: singleturn/multiturn/translation/grpo 데이터 준비
@@ -603,3 +649,4 @@ litagin 쪽 pretrained를 그대로 사용하는 방식이 아니기 때문에
 - Tri-7B (Trillion Labs) Hugging Face: https://huggingface.co/trillionlabs/Tri-7B
 - Embedding model (BAAI BGE-M3) Hugging Face: https://huggingface.co/BAAI/bge-m3
 - Style-Bert-VITS2 (base TTS pipeline) GitHub: https://github.com/litagin02/Style-Bert-VITS2
+- ComfyUI VNCCS (hobi2k) GitHub: https://github.com/hobi2k/ComfyUI_VNCCS
