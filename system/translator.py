@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import torch
-from peft import PeftModel
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
 
@@ -14,34 +15,33 @@ class KoJaTranslator:
 
     def __init__(
         self,
-        base_model_dir: str = "/home/ahnhs2k/pytorch-demo/saya_char_qwen2.5/models/qwen3_core/model_assets/qwen3-1.7b-base",
-        lora_dir: str = "/home/ahnhs2k/pytorch-demo/saya_char_qwen2.5/models/qwen3_core/model_assets/qwen3_1.7_ko2ja_lora/lora_adapter",
+        model_dir: str | None = None,
         device: str | None = None,
         instruction: str | None = None,
     ) -> None:
+        project_root = Path(__file__).resolve().parents[1]
+        self.model_dir = str(
+            Path(model_dir)
+            if model_dir is not None
+            else project_root / "models" / "qwen3_core" / "model_assets" / "qtranslator_1.7b"
+        )
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.instruction = instruction or self.DEFAULT_INSTRUCTION
 
         # 토크나이저 로드
         self.tokenizer = AutoTokenizer.from_pretrained(
-            base_model_dir,
+            self.model_dir,
             use_fast=True,
         )
 
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
-        # 베이스 모델 로드
-        base_model = AutoModelForCausalLM.from_pretrained(
-            base_model_dir,
+        # 병합(merge) 모델 로드
+        self.model = AutoModelForCausalLM.from_pretrained(
+            self.model_dir,
             torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
             device_map="auto",
-        )
-
-        # LoRA 어댑터 결합
-        self.model = PeftModel.from_pretrained(
-            base_model,
-            lora_dir,
         )
 
         self.model.eval()

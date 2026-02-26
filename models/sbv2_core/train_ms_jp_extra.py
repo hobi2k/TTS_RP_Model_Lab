@@ -8,20 +8,9 @@ train_ms_jp_extra.py
 - Generator / Discriminator 및 추가 판별자 초기화
 - 학습 루프(train_and_evaluate) 및 평가(evaluate) 제공
 
-주석 작성 방식(이 파일 내 주석 컨벤션):
-- 모듈 최상단에는 파일 목적과 간단한 설명을 작성합니다.
-- 복잡한 블록(분산 설정, 학습 루프 등)에는 블록 수준 설명과 '왜 이렇게 했는가'를 적습니다.
-- 함수에는 입출력(입력 파라미터, 반환값)과 주요 부작용(예: GPU로 텐서를 이동)을 설명합니다.
-
-문법 팁:
-- `import module as alias` 형태는 긴 모듈명을 축약할 때 사용합니다 (예: `torch.nn.functional as F`).
-- from-import 형태(`from pkg import A, B`)는 패키지 내부의 특정 심볼을 직접 가져와 네임스페이스를 깔끔하게 합니다.
-- 분산/멀티 GPU 코드에서는 `.cuda(device)` 또는 `.to(device)` 로 명시적으로 장치를 지정하는 것이 안전합니다.
-
 아래는 표준 라이브러리 / 외부 라이브러리 import 섹션입니다. 각 라인은 어떤 역할을 하는지 간단히 주석 처리합니다.
 
 tensorboard --logdir /mnt/d/my_tts_dataset/Saya/models --port 6006
-
 
 torchrun --nproc_per_node=1 train_ms_jp_extra.py \
   -c configs/config_jp_extra.json \
@@ -89,7 +78,7 @@ except Exception:
     pass
 try:
     torch.backends.cudnn.allow_tf32 = (
-        True  # 문제가 발생하면 False로 설정해 TF32를 비활성화해보세요.
+        True 
     )
 except Exception:
     pass
@@ -134,9 +123,6 @@ def run():
     - rank: 분산 프로세스의 전역 순번 (0이 메인 프로세스)
     - local_rank: 프로세스에서 사용할 GPU 장치 번호
     - hps: HyperParameters 객체 (JSON에서 로드됨)
-
-    주의:
-    - 가능하면 config.yml 또는 JSON 파일을 사용해 설정을 관리하세요. CLI는 간단한 오버라이드 용도로만 사용하세요.
     """
     # Command line configuration is not recommended unless necessary, use config.yml
     parser = argparse.ArgumentParser()
@@ -267,7 +253,6 @@ def run():
 
     if args.repo_id is not None:
         # Hugging Face Hub에 업로드 시도: repo가 존재하는지 확인하기 위해 먼저 config를 업로드합니다.
-        # 업로드가 실패하면 명령행에서 `huggingface-cli login`으로 로그인되어 있는지 확인하세요.
         try:
             api.upload_file(
                 path_or_fileobj=args.config,
@@ -279,7 +264,6 @@ def run():
             logger.error(
                 f"Failed to upload files to the repo {hps.repo_id}. Please check if the repo exists and you have logged in using `huggingface-cli login`."
             )
-            # 실수로 학습을 계속하면 안될 수 있으므로 에러를 재발생시킵니다.
             raise e
         # 데이터 폴더 업로드(체크포인트 복구용). `delete_patterns`는 업로드 시 특정 파일만 유지하게 도움을 줌
         api.upload_folder(
@@ -303,8 +287,7 @@ def run():
             config_output_path=os.path.join(config.out_dir, "config.json"),
         )
 
-    # 시드 고정: 재현성 확보를 위해 CPU/GPU 연산의 시드를 고정합니다.
-    # 주의: 분산 환경에서 완전한 재현성을 보장하려면 추가 설정이 필요할 수 있습니다.
+    # 시드 고정: 재현성 확보를 위해 CPU/GPU 연산의 시드를 고정합니다..
     torch.manual_seed(hps.train.seed)
     # 현재 프로세스가 사용할 CUDA 디바이스를 명시적으로 지정합니다. local_rank는 torchrun에서 할당된 GPU 인덱스입니다.
     torch.cuda.set_device(local_rank)

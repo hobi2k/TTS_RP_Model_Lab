@@ -51,10 +51,43 @@ uv run models/qwen3_core/grpo_trainer.py \
   --debug_log_completions \
   --debug_log_every_calls 5 \
   --debug_log_num_samples 2
+
+PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+uv run models/qwen3_core/grpo_trainer.py \
+  --model_name models/qwen3_core/model_assets/saya_rp_4b_sft \
+  --train_data /mnt/d/rp_data/grpo/grpo2_train.jsonl \
+  --eval_data /mnt/d/rp_data/grpo/grpo2_eval.jsonl \
+  --output_dir models/qwen3_core/model_assets/saya_rp_4b_grpo \
+  --per_device_train_batch_size 1 \
+  --per_device_eval_batch_size 4 \
+  --gradient_accumulation_steps 16 \
+  --num_train_epochs 2 \
+  --learning_rate 2e-6 \
+  --max_prompt_length 1024 \
+  --max_completion_length 220 \
+  --num_generations 4 \
+  --temperature 0.7 \
+  --top_p 0.9 \
+  --top_k 40 \
+  --repetition_penalty 1.1 \
+  --gradient_checkpointing \
+  --bf16 \
+  --use_lora \
+  --load_in_4bit \
+  --bnb_4bit_quant_type nf4 \
+  --bnb_4bit_use_double_quant \
+  --bnb_4bit_compute_dtype bfloat16 \
+  --reward_embedding_model data/embedding/BGE-m3-ko \
+  --reward_embedding_batch_size 16 \
+  --reward_embedding_max_length 256 \
+  --debug_log_completions \
+  --debug_log_every_calls 5 \
+  --debug_log_num_samples 2
 """
 
 import argparse
 import re
+import inspect
 from typing import Any, Dict, List, Optional, Tuple
 
 import torch
@@ -904,34 +937,39 @@ def main() -> None:
     train_ds = load_grpo_dataset(args.train_data)
     eval_ds = load_grpo_dataset(args.eval_data) if args.eval_data else None
 
-    grpo_args = GRPOConfig(
-        output_dir=args.output_dir,
-        per_device_train_batch_size=args.per_device_train_batch_size,
-        per_device_eval_batch_size=args.per_device_eval_batch_size,
-        gradient_accumulation_steps=args.gradient_accumulation_steps,
-        num_train_epochs=args.num_train_epochs,
-        learning_rate=args.learning_rate,
-        warmup_ratio=args.warmup_ratio,
-        logging_steps=args.logging_steps,
-        save_steps=args.save_steps,
-        save_total_limit=args.save_total_limit,
-        eval_strategy="steps" if eval_ds is not None else "no",
-        eval_steps=args.eval_steps if eval_ds is not None else None,
-        bf16=args.bf16,
-        fp16=args.fp16,
-        gradient_checkpointing=args.gradient_checkpointing,
-        max_prompt_length=args.max_prompt_length,
-        max_completion_length=args.max_completion_length,
-        num_generations=args.num_generations,
-        temperature=args.temperature,
-        top_p=args.top_p,
-        top_k=args.top_k,
-        repetition_penalty=args.repetition_penalty,
-        remove_unused_columns=False,
-        report_to="none",
-        seed=args.seed,
-        reward_weights=[0.28, 0.22, 0.12, 0.12, 0.18, 0.08],
-    )
+    grpo_kwargs = {
+        "output_dir": args.output_dir,
+        "per_device_train_batch_size": args.per_device_train_batch_size,
+        "per_device_eval_batch_size": args.per_device_eval_batch_size,
+        "gradient_accumulation_steps": args.gradient_accumulation_steps,
+        "num_train_epochs": args.num_train_epochs,
+        "learning_rate": args.learning_rate,
+        "warmup_ratio": args.warmup_ratio,
+        "logging_steps": args.logging_steps,
+        "save_steps": args.save_steps,
+        "save_total_limit": args.save_total_limit,
+        "eval_strategy": "steps" if eval_ds is not None else "no",
+        "eval_steps": args.eval_steps if eval_ds is not None else None,
+        "bf16": args.bf16,
+        "fp16": args.fp16,
+        "gradient_checkpointing": args.gradient_checkpointing,
+        "max_prompt_length": args.max_prompt_length,
+        "max_completion_length": args.max_completion_length,
+        "num_generations": args.num_generations,
+        "temperature": args.temperature,
+        "top_p": args.top_p,
+        "top_k": args.top_k,
+        "repetition_penalty": args.repetition_penalty,
+        "remove_unused_columns": False,
+        "report_to": "none",
+        "seed": args.seed,
+        "reward_weights": [0.28, 0.22, 0.12, 0.12, 0.18, 0.08],
+    }
+    supported = set(inspect.signature(GRPOConfig.__init__).parameters.keys())
+    dropped = sorted(k for k in grpo_kwargs if k not in supported)
+    if dropped:
+        print(f"[warn] Unsupported GRPOConfig kwargs in current trl: {dropped}")
+    grpo_args = GRPOConfig(**{k: v for k, v in grpo_kwargs.items() if k in supported})
 
     peft_cfg = build_lora_config(args) if args.use_lora else None
     model_arg: Any = args.model_name
