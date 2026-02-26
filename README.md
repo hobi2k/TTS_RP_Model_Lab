@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="system/webapi/assets/rp_header.png" />
+</p>
+
 # TTS 롤플레잉 모델 연구소
 
 TTS 롤플레잉 모델 연구소는 다음 3개 축으로 구성된 실험 저장소입니다.
