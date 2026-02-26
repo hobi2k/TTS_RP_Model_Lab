@@ -150,7 +150,7 @@ def split_wav(
     # 타임스탬프 순회: start/end를 ms로 변환하여 세그먼트를 추출
     for i, ts in enumerate(speech_timestamps):
         # 주의: ts['start']/16 등은 기존 코드의 스케일 보정을 따릅니다.
-        # 이 스케일이 왜 필요한지는 get_speech_timestamps의 반환 단위를 확인してください.
+        # 이 스케일이 왜 필요한지는 get_speech_timestamps의 반환 단위를 확인
         start_ms = max(ts["start"] / 16 - margin, 0)
         end_ms = min(ts["end"] / 16 + margin, total_ms)
 

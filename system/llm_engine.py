@@ -8,6 +8,8 @@
 from dataclasses import dataclass
 from typing import Optional, List
 from pathlib import Path
+import json
+import re
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from peft import PeftModel
@@ -16,8 +18,8 @@ from peft import PeftModel
 @dataclass
 class GenerationConfig:
     """생성 파라미터 설정값."""
-    max_new_tokens: int = 128
-    temperature: float = 0.7
+    max_new_tokens: int = 180
+    temperature: float = 0.6
     top_p: float = 0.9
     top_k: int = 40
     repetition_penalty: float = 1.12
@@ -58,7 +60,7 @@ class QwenEngine:
         # 베이스 모델 로드
         self.model = AutoModelForCausalLM.from_pretrained(
             resolved_base_model_id,
-            torch_dtype=dtype,
+            dtype=dtype,
             device_map=device_map,
             trust_remote_code=True,
         )
@@ -80,6 +82,70 @@ class QwenEngine:
             tokenize=False,
             add_generation_prompt=True,
         )
+
+    @staticmethod
+    def _normalize_emotion(raw: dict | None) -> dict[str, int]:
+        out = {"neutral": 1, "sad": 0, "happy": 0, "angry": 0}
+        if not isinstance(raw, dict):
+            return out
+
+        vals: dict[str, int] = {}
+        for key in out:
+            try:
+                vals[key] = 1 if int(raw.get(key, 0)) > 0 else 0
+            except Exception:
+                vals[key] = 0
+
+        # one-hot 보장
+        if sum(vals.values()) == 0:
+            return out
+        if vals["angry"]:
+            return {"neutral": 0, "sad": 0, "happy": 0, "angry": 1}
+        if vals["sad"]:
+            return {"neutral": 0, "sad": 1, "happy": 0, "angry": 0}
+        if vals["happy"]:
+            return {"neutral": 0, "sad": 0, "happy": 1, "angry": 0}
+        return {"neutral": 1, "sad": 0, "happy": 0, "angry": 0}
+
+    @torch.no_grad()
+    def infer_emotion_json(self, narration: str, dialogue_ko: str) -> dict[str, int] | None:
+        text = f"{narration}\n{dialogue_ko}".strip()
+        if not text:
+            return {"neutral": 1, "sad": 0, "happy": 0, "angry": 0}
+
+        messages = [
+            {
+                "role": "system",
+                "content": """너는 감정 분류기다. 입력된 사야의 서술/대사를 보고 감정을 one-hot JSON으로만 출력하라.
+반드시 키는 neutral,sad,happy,angry 4개만 사용하고 값은 0 또는 1.
+정확히 하나만 1이어야 한다.
+출력은 JSON 객체 단 하나만 출력하라. 다른 문장 금지.""",
+            },
+            {
+                "role": "user",
+                "content": f"사야 출력:\n{text}",
+            },
+        ]
+        prompt = self.build_prompt(messages)
+        cfg = GenerationConfig(
+            max_new_tokens=96,
+            temperature=0.2,
+            top_p=0.9,
+            top_k=40,
+            repetition_penalty=1.0,
+            no_repeat_ngram_size=0,
+            do_sample=False,
+            use_cache=True,
+        )
+        raw = self.generate(prompt, cfg)
+        match = re.search(r"\{[\s\S]*?\}", raw)
+        if not match:
+            return None
+        try:
+            parsed = json.loads(match.group(0))
+            return self._normalize_emotion(parsed)
+        except Exception:
+            return None
 
     @torch.no_grad()
     def generate(self, prompt: str, gen_config: Optional[GenerationConfig] = None) -> str:

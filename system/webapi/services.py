@@ -98,7 +98,7 @@ class RuntimeServices:
                 SummaryMemoryConfig(enabled=True, update_every_turns=1, max_summary_chars=900),
             )
 
-    def _infer_emotion(self, user_text: str, narration: str, dialogue_ko: str) -> dict[str, int]:
+    def _infer_emotion_keyword(self, user_text: str, narration: str, dialogue_ko: str) -> dict[str, int]:
         text = f"{user_text} {narration} {dialogue_ko}".strip()
         if not text:
             return {"neutral": 1, "sad": 0, "happy": 0, "angry": 0}
@@ -119,6 +119,13 @@ class RuntimeServices:
             return {"neutral": 0, "sad": 0, "happy": 1, "angry": 0}
         return {"neutral": 1, "sad": 0, "happy": 0, "angry": 0}
 
+    @staticmethod
+    def _normalize_single_line_dialogue(text: str) -> str:
+        if not text:
+            return ""
+        # 번역기 입력 정책(한 줄)과 맞추기 위해 줄바꿈을 공백으로 접는다.
+        return " ".join(line.strip() for line in text.splitlines() if line.strip()).strip()
+
     def chat(self, text: str, max_new_tokens: int, temperature: float, top_p: float, top_k: int) -> str:
         # main_loop와 동일한 prompt/history/memory 경로를 사용한다.
         with self._turn_lock:
@@ -129,7 +136,7 @@ class RuntimeServices:
             messages: list[dict] = []
             messages.extend(system_msgs)
 
-            memory_msg = self._memory_chain.build_memory_system_message()
+            memory_msg = self._memory_chain.build_memory_system_message(current_user_text=text)
             if memory_msg is not None:
                 messages.append(memory_msg)
 
@@ -191,7 +198,7 @@ class RuntimeServices:
             messages: list[dict] = []
             messages.extend(system_msgs)
 
-            memory_msg = self._memory_chain.build_memory_system_message()
+            memory_msg = self._memory_chain.build_memory_system_message(current_user_text=text_ko)
             if memory_msg is not None:
                 messages.append(memory_msg)
 
@@ -202,14 +209,16 @@ class RuntimeServices:
             raw_text = llm.generate(prompt)
 
             rp = parser.parse(raw_text)
-            dialogue_ko = rp.dialogue_en.strip() if rp.dialogue_en else ""
+            dialogue_ko = self._normalize_single_line_dialogue(rp.dialogue_en or "")
             dialogue_ja = ""
             wav_path = None
 
             if dialogue_ko:
                 dialogue_ja = translator.translate(dialogue_ko)
                 wav_path = self.tts(dialogue_ja, style_index=style_index, style_weight=style_weight)
-            emotion = self._infer_emotion(text_ko, rp.narration, dialogue_ko)
+            emotion = llm.infer_emotion_json(rp.narration, dialogue_ko)
+            if emotion is None:
+                emotion = self._infer_emotion_keyword(text_ko, rp.narration, dialogue_ko)
 
             # main_loop와 같은 history/memory 업데이트
             self._history.append({"role": "user", "content": text_ko})

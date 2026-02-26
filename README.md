@@ -447,7 +447,7 @@ uv run python -m sbv_runtime \
 - `model.onnx` (또는 정상 동작하는 `model_fp16.onnx`)
 - tokenizer 파일들 (`tokenizer.json` 등)
 
-## G) sbv2_core 의존성 설치 가이드 (현재 가상환경 기준)
+## G) sbv2_core 의존성 설치 가이드
 
 작업 디렉터리:
 ```bash
@@ -566,7 +566,7 @@ litagin 쪽 pretrained를 그대로 사용하는 방식이 아니기 때문에
 - 사용하려는 torch 빌드를 환경에서 명시 고정
 - `uv` 동기화 시 재설치가 일어나지 않도록 lock/의존성 정책 점검
 
-## 7) 권장 운영 순서 (실험용)
+## 7) 권장 운영 순서
 
 1. `data`: singleturn/multiturn/translation/grpo 데이터 준비
 2. `models/qwen3_core`: RP SFT -> merge -> (선택) GRPO
@@ -574,17 +574,28 @@ litagin 쪽 pretrained를 그대로 사용하는 방식이 아니기 때문에
 4. `models/sbv2_core`: TTS 학습/추론 -> (선택) ONNX 변환
 5. `main_loop.py` 또는 `sbv_runtime`로 통합 테스트
 
-## 8) References
+## 8) Limitation
+
+- 한일 번역 모델의 훈련에는 싱글턴 생성 데이터셋의 구어체 번역 항목이 사용되었습니다.
+  - GPT 4.1 모델의 번역 품질과 Qwen3-1.7B 모델의 한계에 의해 좌우됩니다.
+  - 일반 일본어 구어체 데이터로 학습되었으므로 특정 캐릭터의 말투에 맞추어져 있지 않습니다.
+- SBV2 모델은 자체적인 생성 데이터셋으로 학습되었습니다.
+  - 오리지날 `litagin02/Style-Bert-VITS2`의 사전학습 모델을 사용하지 않았습니다.
+  - 추후 성능 향상을 위해 오리지날 파이프라인으로 변경 예정입니다.
+- 장기 기억을 위해 SQLite-vec이 사용되었습니다.
+
+## 9) Planned Work
+
+- 향후 성능 향상을 위해 `litagin02/Style-Bert-VITS2`의 original SBV 파이프라인을 복원할 예정입니다.
+- 그 위에 이 저장소에서 필요한 최소 확장만 유지합니다:
+  - `worker` 기반 상주 실행 경로 추가
+  - ONNX 전용 독립 런타임 추가
+
+
+## 10) References
 
 - Qwen (Alibaba Cloud) GitHub: https://github.com/QwenLM/Qwen3
 - Qwen (Alibaba Cloud) Hugging Face: https://huggingface.co/Qwen
 - Tri-7B (Trillion Labs) Hugging Face: https://huggingface.co/trillionlabs/Tri-7B
 - Embedding model (BAAI BGE-M3) Hugging Face: https://huggingface.co/BAAI/bge-m3
 - Style-Bert-VITS2 (base TTS pipeline) GitHub: https://github.com/litagin02/Style-Bert-VITS2
-
-## 9) Planned Work
-
-- 향후 성능 향상을 위해 `litagin02/Style-Bert-VITS2`의 original SBV 파이프라인을 복원할 예정입니다.
-- 그 위에 이 저장소에서 필요한 최소 확장만 유지합니다:
-- `worker` 기반 상주 실행 경로 추가
-- ONNX 전용 독립 런타임 추가

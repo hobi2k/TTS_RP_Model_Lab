@@ -51,6 +51,12 @@ class MainLoop:
         # role: "user" / "assistant"
         # content: LLM 원문 출력
 
+    @staticmethod
+    def _normalize_single_line_dialogue(text: str) -> str:
+        if not text:
+            return ""
+        return " ".join(line.strip() for line in text.splitlines() if line.strip()).strip()
+
     def step(self, user_text: str) -> None:
         # 1) 시스템 프롬프트 구성
         system_msgs = self.prompt_compiler.compile()
@@ -58,7 +64,7 @@ class MainLoop:
         # 2) 메시지 묶기
         messages: list[dict] = []
         messages.extend(system_msgs)
-        memory_msg = self.memory_chain.build_memory_system_message()
+        memory_msg = self.memory_chain.build_memory_system_message(current_user_text=user_text)
         if memory_msg is not None:
             messages.append(memory_msg)
         messages.extend(self.history)
@@ -75,13 +81,20 @@ class MainLoop:
         if rp.narration:
             print(rp.narration)
 
-        if rp.dialogue_en:
-            print(f"\"{rp.dialogue_en}\"")
+        dialogue_ko = self._normalize_single_line_dialogue(rp.dialogue_en or "")
+        if dialogue_ko:
+            print(f"\"{dialogue_ko}\"")
+
+        # 공용 LLM 감정 판정(JSON one-hot)
+        emotion = self.llm_engine.infer_emotion_json(rp.narration, dialogue_ko)
+        if emotion is None:
+            emotion = {"neutral": 1, "sad": 0, "happy": 0, "angry": 0}
+        print(f"[emotion] {emotion}")
 
         # 대사 번역 및 TTS
-        if rp.dialogue_en:
+        if dialogue_ko:
             try:
-                dialogue_ja = self.translator.translate(rp.dialogue_en)
+                dialogue_ja = self.translator.translate(dialogue_ko)
 
                 wav_path = self.tts_client.speak(dialogue_ja)
 
@@ -99,7 +112,7 @@ class MainLoop:
 
         # 요약 메모리 업데이트
         mem_assistant_text = "\n".join(
-            p for p in [rp.narration.strip(), rp.dialogue_en.strip()] if p
+            p for p in [rp.narration.strip(), dialogue_ko] if p
         ).strip() or raw_text
         self.memory_chain.update(user_text=user_text, assistant_text=mem_assistant_text)
 

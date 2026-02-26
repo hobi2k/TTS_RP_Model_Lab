@@ -135,9 +135,9 @@ from peft import PeftModel
 # =========================================================
 
 MODEL_ASSETS_DIR = Path(__file__).resolve().parent / "model_assets"
-BASE_MODEL = str(MODEL_ASSETS_DIR / "qwen3_4b_rp")
-LORA_DIR = str(MODEL_ASSETS_DIR / "qwen3_4b_rp_grpo")
-TOKENIZER = str(MODEL_ASSETS_DIR / "qwen3_4b_rp_grpo")
+BASE_MODEL = str(MODEL_ASSETS_DIR / "saya_rp_4b")
+LORA_DIR = str(MODEL_ASSETS_DIR / "saya_rp_4b_lora_stage2/lora_adapter")
+TOKENIZER = str(MODEL_ASSETS_DIR / "saya_rp_4b_lora_stage2/tokenizer")
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 DTYPE = torch.bfloat16

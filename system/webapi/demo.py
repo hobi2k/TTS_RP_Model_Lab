@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import html
+import time
 from pathlib import Path
 from typing import Any
 from datetime import datetime, timezone
@@ -322,25 +323,96 @@ def build_demo(base_url: str) -> gr.Blocks:
         "</div>"
     )
 
+    def _error_frame(message: str, history: list[dict[str, Any]]):
+        rec_err = {
+            "user": "",
+            "narration": "시스템 오류가 발생했다.",
+            "dialogue_ko": message,
+            "dialogue_ja": "",
+            "emotion": {"neutral": 1, "sad": 0, "happy": 0, "angry": 0},
+        }
+        return (
+            _render_stage(rec_err, bg_b64=bg_b64, char_b64=char_b64_map["neutral"]),
+            gr.skip(),
+            _render_history(history or []),
+            "",
+            rec_err["narration"],
+            rec_err["dialogue_ko"],
+            "",
+            "",
+            history or [],
+        )
+
     def mainloop_turn(user_text: str, history: list[dict[str, Any]]):
         payload = {"text_ko": user_text}
-        with httpx.Client(timeout=240.0) as client:
-            res = client.post(f"{base_url}/api/main-loop", json=payload)
-            res.raise_for_status()
-            body = res.json()
+        try:
+            with httpx.Client(timeout=240.0) as client:
+                res = client.post(f"{base_url}/api/main-loop", json=payload)
+                res.raise_for_status()
+                body = res.json()
+        except httpx.HTTPStatusError as e:
+            detail = ""
+            try:
+                detail = e.response.json().get("detail", "")
+            except Exception:
+                detail = e.response.text
+            msg = f"main-loop failed ({e.response.status_code}): {detail or str(e)}"
+            yield _error_frame(msg, history or [])
+            return
+        except Exception as e:
+            yield _error_frame(f"main-loop exception: {e}", history or [])
+            return
 
-        rec = {
+        rec_full = {
             "user": user_text,
             "narration": body.get("narration", ""),
             "dialogue_ko": body.get("dialogue_ko", ""),
             "dialogue_ja": body.get("dialogue_ja", ""),
             "emotion": _normalize_emotion(body.get("emotion")),
         }
-        new_history = (history or []) + [rec]
+        old_history = history or []
+        new_history = old_history + [rec_full]
         wav_path = body.get("wav_path", None)
-        char_b64 = _pick_char_b64(rec["emotion"], char_b64_map)
-        return (
-            _render_stage(rec, bg_b64=bg_b64, char_b64=char_b64),
+        char_b64 = _pick_char_b64(rec_full["emotion"], char_b64_map)
+
+        # First frame: narration appears, dialogue starts empty.
+        rec_partial = {
+            **rec_full,
+            "dialogue_ko": "",
+            "dialogue_ja": "",
+        }
+        yield (
+            _render_stage(rec_partial, bg_b64=bg_b64, char_b64=char_b64),
+            gr.skip(),
+            _render_history(old_history),
+            body.get("rp_text", ""),
+            body.get("narration", ""),
+            "",
+            "",
+            "",
+            old_history,
+        )
+
+        full_dialogue_ko = rec_full["dialogue_ko"] or ""
+        step = 1
+        for i in range(step, len(full_dialogue_ko) + 1, step):
+            rec_partial["dialogue_ko"] = full_dialogue_ko[:i]
+            yield (
+                _render_stage(rec_partial, bg_b64=bg_b64, char_b64=char_b64),
+                gr.skip(),
+                _render_history(old_history),
+                body.get("rp_text", ""),
+                body.get("narration", ""),
+                rec_partial["dialogue_ko"],
+                "",
+                "",
+                old_history,
+            )
+            time.sleep(0.016)
+
+        # Final frame: full text + JA + audio + committed history.
+        yield (
+            _render_stage(rec_full, bg_b64=bg_b64, char_b64=char_b64),
             wav_path,
             _render_history(new_history),
             body.get("rp_text", ""),
