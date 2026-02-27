@@ -19,17 +19,17 @@ from datetime import datetime, timezone
 
 try:
     import numpy as np
-except Exception:  # pragma: no cover - optional runtime dependency
+except Exception:
     np = None
 
 try:
     from sklearn.feature_extraction.text import HashingVectorizer
-except Exception:  # pragma: no cover - optional runtime dependency
+except Exception: 
     HashingVectorizer = None
 
 try:
     import sqlite_vec
-except Exception:  # pragma: no cover - optional runtime dependency
+except Exception:
     sqlite_vec = None
 
 from system.llm_engine import GenerationConfig, QwenEngine

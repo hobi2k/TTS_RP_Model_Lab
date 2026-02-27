@@ -14,10 +14,10 @@ TTS 롤플레잉 모델 연구소는 다음 3개 축으로 구성된 실험 저�
 
 ### Note
 
-- Qwen3 모델의 한국어 실력이 저조한 상태에서 시연되었습니다.
-- 처음 응답에서는 지연이 발생합니다.
+- Qwen3_4b 모델의 한국어 실력이 저조한 상태에서 시연되었습니다.
+- 한국어 능력을 향상시킬 방법을 고려 중입니다.
 
-- [LLM + TTS 적용 비주얼노벨 앱 시연 영상](https://drive.google.com/file/d/1WokpNF1pRjvnZABVWxH2gdoGBVTnpEya/view?usp=sharing)
+- [LLM + TTS 적용 비주얼노벨 앱 시연 영상](https://drive.google.com/file/d/10ijSHXPDEp517hlHNRFPytu3IiBE6fhO/view?usp=sharing)
 
 ## Architecture Docs
 
