@@ -19,7 +19,7 @@ from peft import PeftModel
 class GenerationConfig:
     """생성 파라미터 설정값."""
     max_new_tokens: int = 180
-    temperature: float = 0.6
+    temperature: float = 0.7
     top_p: float = 0.9
     top_k: int = 40
     repetition_penalty: float = 1.12
@@ -44,7 +44,7 @@ class QwenEngine:
         resolved_base_model_id = str(
             Path(base_model_id)
             if base_model_id is not None
-            else project_root / "models" / "qwen3_core" / "model_assets" / "saya_rp_4b"
+            else project_root / "models" / "qwen3_core" / "model_assets" / "saya_rp_4b_v2"
         )
 
         # 토크나이저 로드

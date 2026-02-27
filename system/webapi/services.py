@@ -32,7 +32,7 @@ class RuntimeServices:
         project_root = Path(__file__).resolve().parents[2]
         self.qwen_model = os.getenv(
             "QWEN_MODEL_DIR",
-            str(project_root / "models" / "qwen3_core" / "model_assets" / "saya_rp_4b"),
+            str(project_root / "models" / "qwen3_core" / "model_assets" / "saya_rp_4b_v2"),
         )
         self.trans_base = os.getenv(
             "TRANS_MODEL_DIR",
@@ -50,7 +50,7 @@ class RuntimeServices:
                     base_model_id=self.qwen_model,
                     default_gen=GenerationConfig(
                         max_new_tokens=256,
-                        temperature=0.5,
+                        temperature=0.6,
                         top_p=0.9,
                         top_k=40,
                         repetition_penalty=1.12,

@@ -135,9 +135,9 @@ from peft import PeftModel
 # =========================================================
 
 MODEL_ASSETS_DIR = Path(__file__).resolve().parent / "model_assets"
-BASE_MODEL = str(MODEL_ASSETS_DIR / "saya_rp_4b")
-LORA_DIR = str(MODEL_ASSETS_DIR / "saya_rp_4b_lora_stage2/lora_adapter")
-TOKENIZER = str(MODEL_ASSETS_DIR / "saya_rp_4b_lora_stage2/tokenizer")
+BASE_MODEL = str(MODEL_ASSETS_DIR / "saya_rp_4b_sft")
+LORA_DIR = str(MODEL_ASSETS_DIR / "saya_rp_4b_grpo")
+TOKENIZER = str(MODEL_ASSETS_DIR / "saya_rp_4b_grpo")
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 DTYPE = torch.bfloat16
@@ -188,7 +188,7 @@ def generate_reply(
     messages,
     max_new_tokens=550,
     do_sample=True,
-    temperature=0.6,
+    temperature=0.7,
     top_p=0.95,
     repetition_penalty=1.05,
 ):
