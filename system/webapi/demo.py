@@ -343,8 +343,8 @@ def build_demo(base_url: str) -> gr.Blocks:
             history or [],
         )
 
-    def mainloop_turn(user_text: str, history: list[dict[str, Any]]):
-        payload = {"text_ko": user_text}
+    def mainloop_turn(user_text: str, speaker_name: str, history: list[dict[str, Any]]):
+        payload = {"text_ko": user_text, "speaker_name": (speaker_name or "saya")}
         try:
             with httpx.Client(timeout=240.0) as client:
                 res = client.post(f"{base_url}/api/main-loop", json=payload)
@@ -448,9 +448,12 @@ def build_demo(base_url: str) -> gr.Blocks:
             res.raise_for_status()
             return res.json()["text_ja"]
 
-    def tts_api(text_ja: str):
+    def tts_api(text_ja: str, speaker_name: str):
         with httpx.Client(timeout=120.0) as client:
-            res = client.post(f"{base_url}/api/tts", json={"text_ja": text_ja})
+            res = client.post(
+                f"{base_url}/api/tts",
+                json={"text_ja": text_ja, "speaker_name": (speaker_name or "saya")},
+            )
             res.raise_for_status()
             wav = res.json()["wav_path"]
             return wav, wav
@@ -477,6 +480,13 @@ def build_demo(base_url: str) -> gr.Blocks:
                         placeholder='대화창 안에서 입력: 예) "사야, 오늘 기분 어때?"',
                         container=False,
                         elem_id="vn-user-input",
+                    )
+                    speaker_name = gr.Dropdown(
+                        label="Voice",
+                        choices=["saya", "mai"],
+                        value="saya",
+                        elem_id="vn-speaker",
+                        container=False,
                     )
                     run_btn = gr.Button("대화 진행", variant="primary", elem_id="vn-run-btn")
             # Keep mounted for autoplay trigger, but visually hide via CSS.
@@ -515,20 +525,21 @@ def build_demo(base_url: str) -> gr.Blocks:
 
             with gr.Tab("TTS only"):
                 ts_in = gr.Textbox(label="JA Text")
+                ts_speaker = gr.Dropdown(label="Voice", choices=["saya", "mai"], value="saya")
                 ts_out = gr.Textbox(label="WAV Path")
                 ts_audio = gr.Audio(label="Audio", type="filepath", autoplay=True)
                 ts_btn = gr.Button("POST /api/tts")
-                ts_btn.click(tts_api, inputs=ts_in, outputs=[ts_out, ts_audio])
+                ts_btn.click(tts_api, inputs=[ts_in, ts_speaker], outputs=[ts_out, ts_audio])
 
         run_btn.click(
             mainloop_turn,
-            inputs=[user_input, history_state],
+            inputs=[user_input, speaker_name, history_state],
             outputs=[stage_html, audio_hidden, transcript, dbg_rp, dbg_narr, dbg_dko, dbg_dja, dbg_wav, history_state],
             show_progress="hidden",
         )
         user_input.submit(
             mainloop_turn,
-            inputs=[user_input, history_state],
+            inputs=[user_input, speaker_name, history_state],
             outputs=[stage_html, audio_hidden, transcript, dbg_rp, dbg_narr, dbg_dko, dbg_dja, dbg_wav, history_state],
             show_progress="hidden",
         )

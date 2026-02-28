@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 """QWEN 기반 v6 멀티턴 생성 파이프라인."""
 
 from __future__ import annotations
@@ -1071,7 +1068,7 @@ def build_graph(
             return state
 
         state["assistant_text"] = text
-        # CRISIS는 narration/dialogue 분리 안함(자유형)
+        # CRISIS는 narration/dialogue 분리 안함
         state["narration_text"] = ""
         state["dialogue_text"] = ""
         embed_memory.add(text, kind="assistant")
@@ -1954,7 +1951,7 @@ def build_graph(
     g.add_node("GEN_USER", gen_user_node)
     g.add_node("GEN_USER_SEXUAL", gen_user_sexual_node)
     g.add_node("DETECT", detect_node)
-    g.add_node("GEN_ASSISTANT", gen_assistant_node)  # MOD: 통합 생성 노드
+    g.add_node("GEN_ASSISTANT", gen_assistant_node)  # 통합 생성 노드
     g.add_node("GEN_ASSISTANT_REWRITE", gen_assistant_rewrite_node)
     g.add_node("EVAL_DIALOGUE_QUALITY", eval_dialogue_quality_node)
     g.add_node("GEN_CRISIS", gen_crisis_node)

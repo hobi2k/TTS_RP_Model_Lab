@@ -12,9 +12,7 @@ STYLE  = "model_assets/tts/mai/style_vectors.npy"
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-# ----------------------------
 # Load config / model
-# ----------------------------
 hps = HyperParameters.load_from_json(CONFIG)
 
 net_g = get_net_g(
@@ -24,9 +22,7 @@ net_g = get_net_g(
     hps=hps,
 )
 
-# ----------------------------
 # Load style vectors
-# ----------------------------
 style_vectors = np.load(STYLE)
 
 mean_style = style_vectors[0]      # Neutral
@@ -36,14 +32,10 @@ style_weight = 4.0  # 핵심 파라미터 (0.5 ~ 2.0 실험 권장)
 
 style_vec = mean_style + (target_style - mean_style) * style_weight
 
-# ----------------------------
 # Speaker
-# ----------------------------
 sid = hps.data.spk2id["mai"]
 
-# ----------------------------
 # Inference
-# ----------------------------
 with torch.no_grad():
     audio = infer(
         text="今日はちょっと寒いな。今日、うちに来る？",

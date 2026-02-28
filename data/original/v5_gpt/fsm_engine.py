@@ -1,13 +1,9 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 """
 v5_qwen_fsm_engine.py
-=========================================================
+
 Qwen VN FSM Engine
 - ScenarioBook 기반 전역 규칙 파싱
 - 상태 FSM + 전역 헌법 병합
-=========================================================
 """
 
 from __future__ import annotations
@@ -21,9 +17,7 @@ class QwenFSMEngine:
     """
     FSM + ScenarioBook Global Rules Engine
     """
-
     # Init
-
     def __init__(self, fsm_yaml_path: str, system_lore: str):
         """객체 초기화에 필요한 상태를 설정한다."""
         with open(fsm_yaml_path, "r", encoding="utf-8") as f:
@@ -54,7 +48,7 @@ class QwenFSMEngine:
         # 1) 상태별 규칙
         flags.update(self.state_flags.get(self.state, {}))
 
-        # 2) 전역 규칙은 무조건 덮어씀 (헌법)
+        # 2) 전역 규칙은 무조건 덮어씀
         for k, v in self.global_flags.items():
             flags[k] = v
 
@@ -82,7 +76,6 @@ class QwenFSMEngine:
         return False
 
     # Internal
-
     def _parse_global_flags(self, system_lore: str) -> Dict[str, Any]:
         """
         시나리오북(system)에서 전역 규칙 파싱

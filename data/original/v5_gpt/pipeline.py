@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 """Behavior-preserving split pipeline for original v5 GPT."""
 
 from __future__ import annotations

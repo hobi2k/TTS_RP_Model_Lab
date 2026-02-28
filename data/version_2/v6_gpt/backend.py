@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 """v6 GPT 멀티턴 백엔드 호출 모듈.
 
 이 모듈은 OpenAI Responses API 호출과 JSON 추출을 담당한다.

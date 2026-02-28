@@ -1,13 +1,10 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 """
 v7_qwen_fsm_engine.py
-=========================================================
+
 Qwen VN FSM Engine
 - ScenarioBook 기반 전역 규칙 파싱
 - 상태 FSM + 전역 헌법 병합
-=========================================================
+
 """
 
 from __future__ import annotations
@@ -18,7 +15,7 @@ from typing import Dict, Any
 
 
 class QwenFSMEngine:
-    """FSM 규칙을 해석하고 상태 전이를 계산하는 엔진 클래스다."""
+    """FSM 규칙을 해석하고 상태 전이를 계산하는 엔진 클래스"""
 
 
     def __init__(self, fsm_yaml_path: str, system_lore: str):

@@ -42,7 +42,6 @@ class EmbeddingMemory:
         }
 
     # Encoding
-
     @torch.inference_mode()
     def encode(self, text: str) -> np.ndarray:
         """입력 텍스트를 정규화된 임베딩 벡터로 인코딩한다."""
@@ -63,7 +62,6 @@ class EmbeddingMemory:
         return emb.cpu().numpy()[0]
 
     # Repetition Check
-
     def is_repetitive(
         self,
         text: str,
@@ -100,7 +98,6 @@ class EmbeddingMemory:
         return sims.max() >= thr
 
     # Add Memory
-
     def add(self, text: str, *, kind: str = "assistant"):
         """
         벡터를 명시적으로 저장

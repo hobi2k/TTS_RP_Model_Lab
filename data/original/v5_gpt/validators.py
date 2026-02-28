@@ -13,8 +13,6 @@ except ImportError:
         has_speaker_label, strip_line_labels_multiline,
     )
 
-# NOTE: validator constants/functions extracted from v5 cores.
-
 RE_META = re.compile(
     r"(\*+|프롬프트|요청하신|요청된|"
     r"시나리오북|헌법|검증|메타|"

@@ -1,13 +1,9 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 """
 v5_qwen_fsm_engine.py
-=========================================================
+
 Qwen VN FSM Engine
 - ScenarioBook 기반 전역 규칙 파싱
 - 상태 FSM + 전역 헌법 병합
-=========================================================
 """
 
 from __future__ import annotations
@@ -31,7 +27,7 @@ class QwenFSMEngine:
         self.transitions: Dict[str, Any] = self.spec.get("transitions", {})
         self.state_flags: Dict[str, Dict[str, Any]] = self.spec.get("state_flags", {})
 
- # 시나리오북에서 뽑은 절대 규칙
+        # 시나리오북에서 뽑은 절대 규칙
         self.global_flags: Dict[str, Any] = self._parse_global_flags(system_lore)
         self.relation_status: str = self._parse_relation_status(system_lore)
 
@@ -68,7 +64,7 @@ class QwenFSMEngine:
         # 1) 상태별 규칙
         flags.update(self.state_flags.get(self.state, {}))
 
-        # 2) 전역 규칙은 무조건 덮어씀 (헌법)
+        # 2) 전역 규칙은 무조건 덮어씀
         for k, v in self.global_flags.items():
             flags[k] = v
 
@@ -107,7 +103,7 @@ class QwenFSMEngine:
         """내부 헬퍼로 `_parse_global_flags` 계산 절차를 수행한다."""
         flags: Dict[str, Any] = {}
 
-        # 성행위 가능 여부 (헌법)
+        # 성행위 가능 여부
         # 예시 허용 포맷:
         # - 성행위 가능 여부 (True)
         # - 성행위 가능 여부 (False)

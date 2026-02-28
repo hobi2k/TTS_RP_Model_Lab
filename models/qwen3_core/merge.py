@@ -26,12 +26,14 @@ uv run models/qwen3_core/merge.py \
   --safe_serialization \
   --trust_remote_code
 
+while kill -0 1866426 2>/dev/null; do sleep 30; done
 uv run models/qwen3_core/merge.py \
-  --base_model models/qwen3_core/model_assets/saya_rp_4b \
-  --adapter_path models/qwen3_core/model_assets/saya_rp_4b_lora_stage2/lora_adapter \
-  --output_dir models/qwen3_core/model_assets/saya_rp_4b_sft \
+  --base_model models/qwen3_core/model_assets/YanoljaNEXT-EEVE-7B-v2_lora_sft1 \
+  --adapter_path models/qwen3_core/model_assets/YanoljaNEXT-EEVE-7B-v2_lora_stage2/lora_adapter \
+  --output_dir models/qwen3_core/model_assets/saya_rp_7b_v2_sft \
   --dtype bf16 \
   --device_map auto \
+  --offload_dir /tmp/merge_offload \
   --safe_serialization \
   --trust_remote_code
 """
@@ -100,6 +102,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--trust_remote_code", action="store_true")
     parser.add_argument("--safe_serialization", action="store_true")
     parser.add_argument("--max_shard_size", type=str, default="10GB")
+    parser.add_argument(
+        "--offload_dir",
+        type=str,
+        default=None,
+        help=(
+            "Directory for accelerate offloading when --device_map auto triggers "
+            "CPU/disk offload. Defaults to <output_dir>/offload."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -115,23 +126,44 @@ def main() -> None:
     print(f"[MERGE] adapter_path={args.adapter_path}")
     print(f"[MERGE] output_dir={out_dir}")
     print(f"[MERGE] dtype={args.dtype} device_map={args.device_map}")
+    offload_dir = Path(args.offload_dir) if args.offload_dir else (out_dir / "offload")
+    if args.device_map == "auto":
+        offload_dir.mkdir(parents=True, exist_ok=True)
+        print(f"[MERGE] offload_dir={offload_dir}")
 
+    # sft의 경우, tokenizer는 LoRA 모델 폴더의 tokenizer/ 하위 디렉토리를 강제로 사용
+    # 예) adapter_path=.../lora_adapter 이면 tokenizer_dir=.../tokenizer
+    # grpo의 경우 같은 폴더 사용
+    adapter_dir = Path(args.adapter_path)
+    tokenizer_dir = adapter_dir.parent / "tokenizer"
     tokenizer = AutoTokenizer.from_pretrained(
-        args.base_model,
+        str(tokenizer_dir),
         trust_remote_code=args.trust_remote_code,
     )
+
+    base_model_kwargs = {
+        "torch_dtype": torch_dtype,
+        "device_map": args.device_map,
+        "trust_remote_code": args.trust_remote_code,
+    }
+    if args.device_map == "auto":
+        base_model_kwargs["offload_folder"] = str(offload_dir)
 
     base_model = AutoModelForCausalLM.from_pretrained(
         args.base_model,
-        torch_dtype=torch_dtype,
-        device_map=args.device_map,
-        trust_remote_code=args.trust_remote_code,
+        **base_model_kwargs,
     )
+
+    peft_kwargs = {
+        "is_trainable": False,
+    }
+    if args.device_map == "auto":
+        peft_kwargs["offload_dir"] = str(offload_dir)
 
     lora_model = PeftModel.from_pretrained(
         base_model,
         args.adapter_path,
-        is_trainable=False,
+        **peft_kwargs,
     )
     merged_model = lora_model.merge_and_unload()
 

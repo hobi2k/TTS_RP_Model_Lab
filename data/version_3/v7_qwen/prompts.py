@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 """QWEN 멀티턴 생성용 프롬프트 빌더 모음."""
 
 from __future__ import annotations

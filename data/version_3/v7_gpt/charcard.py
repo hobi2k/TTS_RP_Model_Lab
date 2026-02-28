@@ -21,7 +21,7 @@ from openai import OpenAI
 
 try:
     from dotenv import load_dotenv
-except ImportError:  # pragma: no cover
+except ImportError:
     load_dotenv = None
 
 PROTAGONIST_NAMES = ["사야", "마이", "코하루"]
@@ -136,7 +136,6 @@ START_FRAMES_BY_GENRE = {
 }
 
 # 연애 / 육성 / 정신붕괴 전용
-
 SCENARIO_BOOK_GENERATOR = """
 당신은 한국어 비주얼 노벨을 위한
 완성형 롤플레잉 시나리오북을 작성한다.

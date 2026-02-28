@@ -3,7 +3,7 @@
 
 """
 rp_dataset_preprocess_rewritten.py
-=========================================================
+
 RP 멀티턴 데이터셋 전처리 (REWRITTEN 결과물 전용) (JSONL -> JSONL)
 
 포함 기능 (요구사항 + 추가 메타 제거)
@@ -15,7 +15,7 @@ RP 멀티턴 데이터셋 전처리 (REWRITTEN 결과물 전용) (JSONL -> JSONL
 - (assistant) '주인공' 표지 토큰을 성별 대명사(그/그녀)로 치환(조사 보존)
 - (all) 끊긴 문장(라인 끝이 . ? ! " … “ ” 로 끝나지 않음) 라인 삭제
 
-Run:
+사용 예시:
 uv run data/others/v5_data_preprocessing.py \
   --in_jsonl /mnt/d/rp_data/singleturn/rp_singleturn_united.jsonl \
   --out_jsonl /mnt/d/rp_data/singleturn/rp_singleturn_cleaned.jsonl \
@@ -28,7 +28,6 @@ uv run data/others/v5_data_preprocessing.py \
   --out_jsonl /mnt/d/rp_data/v7/rp_datum_unite_cleaned.jsonl \
   --model_name models/qwen3_core/model_assets/qwen3-8b \
   --max_length 4096  
-=========================================================
 """
 
 from __future__ import annotations
@@ -41,10 +40,7 @@ from typing import Dict, List, Optional
 from transformers import AutoTokenizer
 
 
-# =========================================================
 # 0) system(멀티턴 규칙) 탐지
-# =========================================================
-
 RE_MULTITURN_SYSTEM = re.compile(
     r"(멀티턴\s*대화\s*기본\s*형식|\[멀티턴|직접\s*발화는\s*큰따옴표|별표\(\*.*\*\)|이모지\s*및\s*장식\s*문자|\[성인\s*모드\])",
     flags=re.IGNORECASE,
@@ -76,10 +72,7 @@ def remove_second_system_multiturn_rule(messages: List[Dict[str, str]]) -> List[
     return out
 
 
-# =========================================================
 # 1) 성별 추정 (system 기반)
-# =========================================================
-
 def infer_protagonist_gender_from_system(system_text: str) -> Optional[str]:
     """
     return: 'female' | 'male' | None
@@ -107,10 +100,7 @@ def infer_protagonist_gender_from_system(system_text: str) -> Optional[str]:
     return None
 
 
-# =========================================================
 # 2-1) 이름 정규화 (오탈자/표기 변형 보정)
-# =========================================================
-
 RE_SEP_LINE = re.compile(r"^\s*[-=]{3,}\s*$")
 
 
@@ -184,9 +174,7 @@ def normalize_character_names(
     return out
 
 
-# =========================================================
 # 3) assistant 전용: rewrite 메타 제거 (문장/블록 단위)
-# =========================================================
 
 # (a) 깨진 슬래시 메타 토큰이 포함된 라인 제거: /결정/ /반응/결정] 등
 RE_BROKEN_META_SLASH_TOKEN = re.compile(r"/[^/\n]{1,40}/")
@@ -283,10 +271,7 @@ def preprocess_assistant_rewritten_text(
     return text
 
 
-# =========================================================
 # 4) 끊긴 문장 제거 (라인 단위)
-# =========================================================
-
 RE_LINE_END_OK = re.compile(r'.*([.!?…""“”])\s*$')
 
 def drop_broken_sentences_by_line(text: str) -> str:
@@ -303,10 +288,7 @@ def drop_broken_sentences_by_line(text: str) -> str:
     return "\n".join(kept).strip()
 
 
-# =========================================================
 # 5) 길이 제한(토큰) 처리
-# =========================================================
-
 def count_chat_tokens(messages: List[Dict[str, str]], tokenizer) -> int:
     ids = tokenizer.apply_chat_template(
         messages,
@@ -353,10 +335,7 @@ def trim_oldest_user_assistant_pairs_to_max_tokens(
     return out
 
 
-# =========================================================
 # 6) 샘플 단위 처리
-# =========================================================
-
 def preprocess_one_sample(sample: Dict, tokenizer, max_length: int) -> Optional[Dict]:
     messages = sample.get("messages")
     if not isinstance(messages, list) or not messages:
@@ -420,12 +399,10 @@ def preprocess_one_sample(sample: Dict, tokenizer, max_length: int) -> Optional[
     if not out_msgs or out_msgs[0].get("role") != "system":
         return None
 
-    # =====================================================
     # 9) 대화 턴 정렬: user-assistant 페어 강제
     # - 첫 발화가 assistant면 제거
     # - 연속 동일 role은 마지막 것만 유지
     # - 마지막이 user면 제거 (요청사항)
-    # =====================================================
     system_msgs = [m for m in out_msgs if m.get("role") == "system"]
     dialogue_msgs = [m for m in out_msgs if m.get("role") in ("user", "assistant")]
 
@@ -477,10 +454,7 @@ def preprocess_one_sample(sample: Dict, tokenizer, max_length: int) -> Optional[
     return {"messages": trimmed}
 
 
-# =========================================================
 # 7) IO
-# =========================================================
-
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--in_jsonl", required=True, help="input jsonl path")

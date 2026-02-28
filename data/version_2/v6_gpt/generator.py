@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 """GPT 기반 v6 멀티턴 생성 파이프라인."""
 
 from __future__ import annotations
@@ -821,7 +818,7 @@ def build_graph(
             )
             return state
         narr, dia, merged = split_integrated_assistant(text)
-        # MOD(중요): kind별 repetition 검사, keyword-only 준수
+        # kind별 repetition 검사, keyword-only 준수
         state["narration_text"] = narr
         state["dialogue_text"] = dia
         state["assistant_text"] = merged
@@ -2051,7 +2048,7 @@ def run_scenario(
     act_path = action_fsm_path or "data/version_2/v6_qwen/action_fsm.yaml"
     fsm_act = QwenFSMEngine(act_path, system_lore)
 
-    # MOD: device 자동 선택(모델 device_map="auto" 고려)
+    # device 자동 선택(모델 device_map="auto" 고려)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     embed_memory = EmbeddingMemory("data/embedding/BGE-m3-ko", device=device)

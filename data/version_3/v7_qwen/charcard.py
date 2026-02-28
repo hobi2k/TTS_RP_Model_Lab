@@ -8,9 +8,6 @@ Run:
     --samples 50000 \
     --use_4bit
 
-- 상황 요약의 예시는 다음과 같다:
-    사야는 예상하지 못한 {{user}}의 고백에 놀란 상태이다.
-    {{user}}는 사야를 향한 자신의 감정을 계속해서 전한다.
 """
 import os
 import json

@@ -17,9 +17,7 @@ import os
 from pathlib import Path
 
 
-# ==============================
 # 설정부
-# ==============================
 BASE_DIR = Path("/mnt/d/rp_data/singleturn")
 INPUT_JSONL_PATH = Path(BASE_DIR / "rp_generated.jsonl")
 OUTPUT_JSONL_PATH = Path(BASE_DIR / "ko-ja_translation_sft.jsonl")
@@ -27,10 +25,7 @@ OUTPUT_JSONL_PATH = Path(BASE_DIR / "ko-ja_translation_sft.jsonl")
 INSTRUCTION_TEXT = "다음 한국어 문장을 자연스러운 일본어로 번역하시오."
 
 
-# ==============================
 # 유틸 함수
-# ==============================
-
 def is_valid_pair(ko: str, jp: str) -> bool:
     """
     한국어/일본어 번역 쌍이 학습에 적합한지 검사한다.
@@ -63,10 +58,7 @@ def make_sft_sample(ko: str, jp: str) -> dict:
     }
 
 
-# ==============================
 # 메인 변환 로직
-# ==============================
-
 def convert_jsonl():
     output_samples = []
 
@@ -87,9 +79,7 @@ def convert_jsonl():
             if scene is None:
                 continue
 
-            # # ------------------------------
-            # # narration 처리
-            # # ------------------------------
+            # narration 처리
             # narration = scene.get("narration")
             # if narration:
             #     ko = narration.get("ko")
@@ -100,9 +90,7 @@ def convert_jsonl():
             #             make_sft_sample(ko, jp)
             #         )
 
-            # ------------------------------
             # dialogue 처리
-            # ------------------------------
             dialogue = scene.get("dialogue")
             if dialogue:
                 ko = dialogue.get("ko")
@@ -113,9 +101,7 @@ def convert_jsonl():
                         make_sft_sample(ko, jp)
                     )
 
-    # ------------------------------
     # 결과 저장
-    # ------------------------------
     with OUTPUT_JSONL_PATH.open("w", encoding="utf-8") as f:
         for sample in output_samples:
             f.write(json.dumps(sample, ensure_ascii=False) + "\n")
@@ -123,9 +109,6 @@ def convert_jsonl():
     print(f"[DONE] {len(output_samples)} samples written to {OUTPUT_JSONL_PATH}")
 
 
-# ==============================
 # 엔트리 포인트
-# ==============================
-
 if __name__ == "__main__":
     convert_jsonl()

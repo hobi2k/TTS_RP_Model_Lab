@@ -54,16 +54,16 @@ uv run models/qwen3_core/grpo_trainer.py \
 
 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
 uv run models/qwen3_core/grpo_trainer.py \
-  --model_name models/qwen3_core/model_assets/saya_rp_7b_v2_sft \
+  --model_name models/qwen3_core/model_assets/saya_rp_7b_sft \
   --train_data /mnt/d/rp_data/grpo/grpo3_train.jsonl \
   --eval_data /mnt/d/rp_data/grpo/grpo3_eval.jsonl \
-  --output_dir models/qwen3_core/model_assets/saya_rp_7b_v2_grpo \
+  --output_dir models/qwen3_core/model_assets/saya_rp_7b_grpo \
   --per_device_train_batch_size 1 \
   --per_device_eval_batch_size 4 \
   --gradient_accumulation_steps 16 \
-  --num_train_epochs 2 \
+  --num_train_epochs 1 \
   --learning_rate 2e-6 \
-  --max_prompt_length 1024 \
+  --max_prompt_length 768 \
   --max_completion_length 200 \
   --num_generations 4 \
   --temperature 0.7 \
@@ -83,21 +83,6 @@ uv run models/qwen3_core/grpo_trainer.py \
   --debug_log_completions \
   --debug_log_every_calls 5 \
   --debug_log_num_samples 2
-
-PYTORCH_ALLOC_CONF=expandable_segments:True \
-uv run models/qwen3_core/grpo_trainer.py \
-  --model_name models/qwen3_core/model_assets/saya_rp_7b_v2_sft \
-  --train_data /mnt/d/rp_data/grpo/grpo3_train.jsonl \
-  --eval_data /mnt/d/rp_data/grpo/grpo3_eval.jsonl \
-  --output_dir models/qwen3_core/model_assets/saya_rp_7b_v2_grpo \
-  --per_device_train_batch_size 1 \
-  --per_device_eval_batch_size 2 \
-  --gradient_accumulation_steps 16 \
-  --num_train_epochs 2 \
-  --learning_rate 2e-6 \
-  --max_prompt_length 1024 \
-  --max_completion_length 200 \
-  --num_generations 2
 """
 
 import argparse
@@ -967,10 +952,7 @@ def main() -> None:
         "remove_unused_columns": False,
         "report_to": "none",
         "seed": args.seed,
-        # reward_funcs 순서:
-        # [format, role_split, grounded_to_user, character_consistency, reference_alignment, length]
-        # character_consistency 가중치를 올리고(reference보다 우선) reference_alignment는 낮춘다.
-        "reward_weights": [0.28, 0.22, 0.12, 0.18, 0.12, 0.08],
+        "reward_weights": [0.28, 0.22, 0.12, 0.12, 0.18, 0.08],
     }
     supported = set(inspect.signature(GRPOConfig.__init__).parameters.keys())
     dropped = sorted(k for k in grpo_kwargs if k not in supported)

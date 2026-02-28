@@ -58,8 +58,6 @@ def resolve_allow_sexual(flag_value: Any, system_lore: str) -> bool:
         return False
     return safe_bool(flag_value)
 
-# NOTE: prompt builders extracted from v5 generator core.
-
 def build_user_prompt(
     *,
     fsm_state: str,

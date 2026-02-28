@@ -2,8 +2,6 @@ from __future__ import annotations
 import re
 from typing import Any, List, Optional
 
-# NOTE: utility constants/functions extracted from v5 cores.
-
 RE_QUOTE = re.compile(r"\"([^\"]+)\"")
 
 

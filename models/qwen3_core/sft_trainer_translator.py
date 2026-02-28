@@ -40,9 +40,7 @@ from transformers import (
     TrainingArguments,
 )
 
-# =========================================================
-# 경로 / 기본값 설정 (★ 핵심 ★)
-# =========================================================
+# 경로 / 기본값 설정
 
 # 이 파일 위치: models/qwen3_core/sft_trainer_translator.py
 QWEN3_CORE_DIR = Path(__file__).resolve().parent          # .../models/qwen3_core
@@ -59,9 +57,7 @@ DEFAULT_DATA_PATH = DATA_DIR / "ko-ja_translation_sft.jsonl"
 DEFAULT_OUTPUT_DIR = MODEL_ASSETS_DIR / "qwen3_1.7_ko2ja_lora"
 
 
-# =========================================================
 # 프롬프트 구성
-# =========================================================
 
 def build_prompt(instruction: str, user_input: str) -> str:
     """
@@ -97,9 +93,7 @@ def build_full_text(example: Dict[str, str], eos_token: str) -> str:
     return prompt + answer + eos_token
 
 
-# =========================================================
 # Tokenize
-# =========================================================
 
 def tokenize_function(
     examples: Dict[str, List[str]],
@@ -150,9 +144,7 @@ def tokenize_function(
     return tokenized
 
 
-# =========================================================
 # LoRA 설정
-# =========================================================
 
 def build_lora_config(r: int, alpha: int, dropout: float) -> LoraConfig:
     """
@@ -207,9 +199,7 @@ class DataCollatorForCausalLM:
         batch["labels"] = labels_tensor
         return batch
 
-# =========================================================
 # Main
-# =========================================================
 
 def main() -> None:
     parser = argparse.ArgumentParser()
@@ -262,9 +252,7 @@ def main() -> None:
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # =====================================================
     # Tokenizer / Model 로드 (로컬)
-    # =====================================================
 
     tokenizer = AutoTokenizer.from_pretrained(args.model_name, use_fast=True)
 
@@ -281,9 +269,7 @@ def main() -> None:
         model.gradient_checkpointing_enable()
         model.config.use_cache = False
 
-    # =====================================================
     # LoRA 적용
-    # =====================================================
 
     lora_config = build_lora_config(
         r=args.lora_r,
@@ -293,9 +279,7 @@ def main() -> None:
     model = get_peft_model(model, lora_config)
     model.print_trainable_parameters()
 
-    # =====================================================
     # Dataset 로드
-    # =====================================================
 
     raw = load_dataset("json", data_files=str(data_path))
     dataset = raw["train"]
@@ -326,9 +310,7 @@ def main() -> None:
             desc="Tokenizing eval dataset",
         )
 
-    # =====================================================
     # Trainer
-    # =====================================================
 
 
     data_collator = DataCollatorForCausalLM(tokenizer=tokenizer)
@@ -364,9 +346,7 @@ def main() -> None:
 
     trainer.train()
 
-    # =====================================================
     # 저장 (LoRA만)
-    # =====================================================
 
     trainer.model.save_pretrained(output_dir / "lora_adapter")
     tokenizer.save_pretrained(output_dir / "tokenizer")

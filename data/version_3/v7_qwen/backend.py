@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 """v6 Qwen 멀티턴 백엔드 호출 모듈.
 
 이 모듈은 로컬 Qwen 모델의 생성 호출과 JSON 추출을 담당한다.

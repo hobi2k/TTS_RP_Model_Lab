@@ -1,8 +1,6 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 """Behavior-preserving split pipeline for original v5 Qwen.
 
+사용 예시:
   uv run data/original/v5_qwen/pipeline.py \
     --model_path data/generator/Tri-7B \
     --scenario_out /mnt/d/rp_data/v7/rp_scenario.jsonl \

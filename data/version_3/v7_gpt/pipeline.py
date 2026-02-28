@@ -1,13 +1,10 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 """
 Scenario book -> multi-turn pipeline runner (one-by-one).
 
 Generates one scenario book, immediately generates its multi-turn,
 then repeats until samples are filled.
 
-Example:
+사용 예시:
   uv run data/v7_gpt_pipeline.py \
     --openai_model gpt-4o-mini \
     --scenario_out /mnt/d/rp_data/v7/rp_scenario_gpt.jsonl \

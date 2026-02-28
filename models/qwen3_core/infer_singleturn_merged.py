@@ -130,12 +130,9 @@ from peft import PeftModel
 - 엔딩은 상호작용 누적 결과로 자연스럽게 형성된다.
 """
 
-# =========================================================
 # 경로
-# =========================================================
-
 MODEL_ASSETS_DIR = Path(__file__).resolve().parent / "model_assets"
-BASE_MODEL = str(MODEL_ASSETS_DIR / "saya_rp_4b_sft")
+BASE_MODEL = str(MODEL_ASSETS_DIR / "saya_rp_7b_v2_sft")
 LORA_DIR = str(MODEL_ASSETS_DIR / "qwen3_4b_rp_grpo")
 TOKENIZER = str(MODEL_ASSETS_DIR / "qwen3_4b_rp_grpo")
 
@@ -143,10 +140,7 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 DTYPE = torch.bfloat16
 
 
-# =========================================================
 # 로드
-# =========================================================
-
 def load_model():
     tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL, use_fast=True, fix_mistral_regex=True)
     if tokenizer.pad_token is None:
@@ -178,10 +172,7 @@ def load_model():
     return tokenizer, model
 
 
-# =========================================================
 # Generation
-# =========================================================
-
 @torch.inference_mode()
 def generate_reply(
     tokenizer,
@@ -237,14 +228,12 @@ def generate_reply(
     return decoded.strip()
 
 
-# =========================================================
 # 인터랙티브 루프
-# =========================================================
 
 def chat_loop():
     tokenizer, model = load_model()
 
-    # ---------- SYSTEM (1회만) ----------
+    # SYSTEM
     messages = [
         {
             "role": "system",

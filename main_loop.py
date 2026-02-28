@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+import os
 from collections import deque
 
 from system.llm_engine import QwenEngine, GenerationConfig
@@ -28,7 +29,7 @@ class MainLoop:
         self.prompt_compiler = PromptCompiler(profile)
         self.llm_engine = QwenEngine(
             default_gen=GenerationConfig(
-                max_new_tokens=256,
+                max_new_tokens=200,
                 temperature=0.5,
                 top_p=0.9,
                 top_k=40,
@@ -45,8 +46,10 @@ class MainLoop:
         )
         self.translator = KoJaTranslator()
         self.tts_client = SBV2WorkerClient()
+        self.speaker_name = os.getenv("TTS_SPEAKER_NAME", "saya").strip().lower()
 
         # 대화 이력 저장
+        # user+assistant 2개 메시지가 1턴이므로 3턴 유지=6개 메시지
         self.history: deque[dict] = deque(maxlen=6)
         # role: "user" / "assistant"
         # content: LLM 원문 출력
@@ -96,7 +99,10 @@ class MainLoop:
             try:
                 dialogue_ja = self.translator.translate(dialogue_ko)
 
-                wav_path = self.tts_client.speak(dialogue_ja)
+                wav_path = self.tts_client.speak(
+                    dialogue_ja,
+                    speaker_name=self.speaker_name,
+                )
 
                 subprocess.run(
                     ["ffplay", "-nodisp", "-autoexit", str(wav_path)],

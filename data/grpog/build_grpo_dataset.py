@@ -30,6 +30,19 @@ uv run data/grpog/build_grpo_dataset.py \
   --tokenizer_path models/qwen3_core/model_assets/qwen3_4b_rp \
   --max_prompt_tokens 1024 \
   --max_reference_tokens 220
+
+uv run data/grpog/build_grpo_dataset.py \
+  --inputs /mnt/d/rp_data/rewrite/multiturn_rewrite.jsonl \
+  --out_train /mnt/d/rp_data/grpo/grpo3_train.jsonl \
+  --out_eval /mnt/d/rp_data/grpo/grpo3_eval.jsonl \
+  --eval_ratio 0.05 \
+  --seed 42 \
+  --max_context_messages 32 \
+  --min_prompt_chars 8 \
+  --min_reference_chars 4 \
+  --tokenizer_path models/qwen3_core/model_assets/saya_rp_4b_v2 \
+  --max_prompt_tokens 1024 \
+  --max_reference_tokens 200
 """
 
 from __future__ import annotations

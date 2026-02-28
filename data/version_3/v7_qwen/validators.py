@@ -1,9 +1,6 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 """
 data/v7_qwen_multiturn_gen.py
-=========================================================
+
 LangGraph-orchestrated VN multi-turn generator (FSM-driven)
 (ROLE-SEPARATION HARDENED, NO "SIMPLIFY" REGRESSION)
 
@@ -13,7 +10,7 @@ LangGraph-orchestrated VN multi-turn generator (FSM-driven)
 - Evaluation: LLM(JSON) scoring -> FSM inputs (no keyword rule scoring)
 - Memory: explicit summary + EmbeddingMemory (BGE-m3-ko) anti-repeat
 
-Run:
+사용 예시:
 uv run data/v7_qwen_multiturn_gen.py \
   --model_path data/generator/Tri-7B \
   --scenario_path /mnt/d/rp_data/qwen/rp_scenario.jsonl \
@@ -22,15 +19,12 @@ uv run data/v7_qwen_multiturn_gen.py \
   --action_fsm_path data/version_3/v7_qwen/action_fsm.yaml \
   --turns 3 \
   --use_4bit
-=========================================================
 
-핵심 변경(요구사항 반영):
+핵심 변경:
 - 플레이어는 시나리오북에서 추출한 "플레이어 이름"을 사용한다.
 - 주인공은 시나리오북에서 추출한 "주인공 이름"을 사용한다.
 - 출력에 별표(*)/장식문자/괄호()/메타(FSM, system 등) 언급을 강하게 차단한다.
 - EmbeddingMemory.is_repetitive()는 keyword-only이므로 절대 positional로 넘기지 않는다.
-- (선택) 서술/대사 노드 분리를 "통합 생성 1회"로 변경하여 톤 싱크/비용을 최적화한다.
-  -> 다만 메모리(kind)는 narration/dialogue/assistant로 분리 저장한다.
 """
 
 from __future__ import annotations
@@ -56,7 +50,7 @@ from utils import (
 RE_QUOTE = re.compile(r"\"([^\"]+)\"")
 RE_JSON = re.compile(r"\{.*?\}", flags=re.DOTALL)
 
-# MOD: 별표(*) 및 다양한 장식문자/메타 단어를 더 강하게 차단하도록 확장
+# 별표(*) 및 다양한 장식문자/메타 단어를 더 강하게 차단하도록 확장
 RE_META = re.compile(
     r"(\*+|프롬프트|요청하신|요청된|"
     r"시나리오북|헌법|검증|메타|"
@@ -65,7 +59,7 @@ RE_META = re.compile(
     flags=re.IGNORECASE,
 )
 
-# MOD: 메타 전개/선택지류 문구 차단
+# 메타 전개/선택지류 문구 차단
 RE_META_BLOCK = re.compile(
     r"(장면\s*전환|다음\s*장면|다음\s*장면\s*전개|다음\s*행동|"
     r"선택지|선택하세요|다음\s*전개|전개\s*요약|요약\s*:|결론\s*:|"
@@ -104,10 +98,10 @@ RE_POLICY_LEAK_PHRASE = re.compile(
     flags=re.IGNORECASE,
 )
 
-# MOD: 괄호() 금지 규칙을 validator에서 강제하기 위한 패턴
+# 괄호() 금지 규칙을 validator에서 강제하기 위한 패턴
 RE_PAREN = re.compile(r"[\(\)]")
 
-# MOD: 플레이어 이름 참조(legacy)
+# 플레이어 이름 참조(legacy)
 RE_USER_PLACEHOLDER = re.compile(r"\{\{user\}\}")
 RE_LINE_LABEL = re.compile(
     r"^\s*[-•·]?\s*(서술|대사|행동|반응|대답|정보\s*공개|Action|Narration|Dialogue|Speech|Player'?s\s*Action)\s*[:：]\s*",
@@ -460,12 +454,12 @@ def user_invalid_reason(text: str, *, player_name: str = "", protagonist: str = 
     t = (text or "").strip()
     if not t:
         return "user_empty"
-    # MOD: 괄호/별표 금지 강제
+    # 괄호/별표 금지 강제
     if _has_forbidden_chars(t):
         return "user_forbidden_chars"
     if RE_COLON_ANY.search(t):
         return "user_colon_char"
-    # MOD: 플레이어 이름이 누락될 수 있어도 형식 위반은 아니다.
+    # 플레이어 이름이 누락될 수 있어도 형식 위반은 아니다.
     if not quotes_balanced(t):
         return "user_unbalanced_quotes"
     q = extract_quotes(t)

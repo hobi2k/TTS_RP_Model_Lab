@@ -22,6 +22,7 @@ class RuntimeServices:
         self._load_lock = Lock()
         self._turn_lock = Lock()
         self._parser = RPParser()
+        # user+assistant 2개 메시지가 1턴이므로 3턴 유지=6개 메시지
         self._history: deque[dict] = deque(maxlen=6)
         self._llm = None
         self._prompt_compiler = None
@@ -32,7 +33,7 @@ class RuntimeServices:
         project_root = Path(__file__).resolve().parents[2]
         self.qwen_model = os.getenv(
             "QWEN_MODEL_DIR",
-            str(project_root / "models" / "qwen3_core" / "model_assets" / "saya_rp_4b_v2"),
+            str(project_root / "models" / "qwen3_core" / "model_assets" / "saya_rp_7b"),
         )
         self.trans_base = os.getenv(
             "TRANS_MODEL_DIR",
@@ -49,10 +50,10 @@ class RuntimeServices:
                 self._llm = QwenEngine(
                     base_model_id=self.qwen_model,
                     default_gen=GenerationConfig(
-                        max_new_tokens=256,
+                        max_new_tokens=200,
                         temperature=0.6,
                         top_p=0.9,
-                        top_k=40,
+                        top_k=50,
                         repetition_penalty=1.12,
                         no_repeat_ngram_size=4,
                         do_sample=True,
@@ -182,11 +183,16 @@ class RuntimeServices:
     def parse(self, text: str):
         return self._parser.parse(text)
 
-    def tts(self, text_ja: str, style_index: int, style_weight: float) -> str:
+    def tts(self, text_ja: str, style_index: int, style_weight: float, speaker_name: str = "saya") -> str:
         client = self._ensure_tts()
-        return client.speak(text_ja, style_index=style_index, style_weight=style_weight)
+        return client.speak(
+            text_ja,
+            style_index=style_index,
+            style_weight=style_weight,
+            speaker_name=speaker_name,
+        )
 
-    def turn(self, text_ko: str, style_index: int, style_weight: float):
+    def turn(self, text_ko: str, style_index: int, style_weight: float, speaker_name: str = "saya"):
         # main_loop.py 흐름과 동일하게 상태(history/memory)를 직렬 처리
         with self._turn_lock:
             llm = self._ensure_llm()
@@ -215,7 +221,12 @@ class RuntimeServices:
 
             if dialogue_ko:
                 dialogue_ja = translator.translate(dialogue_ko)
-                wav_path = self.tts(dialogue_ja, style_index=style_index, style_weight=style_weight)
+                wav_path = self.tts(
+                    dialogue_ja,
+                    style_index=style_index,
+                    style_weight=style_weight,
+                    speaker_name=speaker_name,
+                )
             emotion = llm.infer_emotion_json(rp.narration, dialogue_ko)
             if emotion is None:
                 emotion = self._infer_emotion_keyword(text_ko, rp.narration, dialogue_ko)

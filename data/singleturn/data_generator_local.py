@@ -6,6 +6,7 @@
 - 최종 출력 스키마:
   {system, user, assistant_raw, scene}
 
+사용 예시:
 uv run data/singleturn/data_generator_local.py \
   --model_path data/generator/Tri-7B \
   --out_path /mnt/d/rp_data/singleturn/rp_generated_local.jsonl \

@@ -1,6 +1,4 @@
-# =========================================================
 # Qwen VN Action/Event FSM (separate from relationship/emotion)
-# =========================================================
 
 name: qwen_vn_action_fsm_v1
 
