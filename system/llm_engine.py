@@ -51,7 +51,7 @@ class QwenEngine:
         self.resolved_base_model_id = str(
             Path(base_model_id)
             if base_model_id is not None
-            else project_root / "models" / "qwen3_core" / "model_assets" / "saya_rp_7b"
+            else project_root / "models" / "qwen3_core" / "model_assets" / "saya_rp_7b_v2"
         )
 
         self.backend = "hf"

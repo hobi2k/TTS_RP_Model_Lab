@@ -32,7 +32,7 @@ uv run data/grpog/build_grpo_dataset.py \
   --max_reference_tokens 220
 
 uv run data/grpog/build_grpo_dataset.py \
-  --inputs /mnt/d/rp_data/rewrite/multiturn_rewrite.jsonl \
+  --inputs /mnt/d/rp_data/rewrite/singleturn_rewrite.jsonl \
   --out_train /mnt/d/rp_data/grpo/grpo3_train.jsonl \
   --out_eval /mnt/d/rp_data/grpo/grpo3_eval.jsonl \
   --eval_ratio 0.05 \
@@ -41,7 +41,7 @@ uv run data/grpog/build_grpo_dataset.py \
   --min_prompt_chars 8 \
   --min_reference_chars 4 \
   --tokenizer_path models/qwen3_core/model_assets/saya_rp_4b_v2 \
-  --max_prompt_tokens 1024 \
+  --max_prompt_tokens 768 \
   --max_reference_tokens 200
 """
 

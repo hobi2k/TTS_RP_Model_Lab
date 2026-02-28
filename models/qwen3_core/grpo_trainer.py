@@ -95,9 +95,15 @@ uv run models/qwen3_core/grpo_trainer.py \
   --gradient_accumulation_steps 16 \
   --num_train_epochs 2 \
   --learning_rate 2e-6 \
-  --max_prompt_length 1024 \
+  --max_prompt_length 768 \
   --max_completion_length 200 \
   --num_generations 2
+  --use_lora \
+  --load_in_4bit \
+  --bnb_4bit_quant_type nf4 \
+  --bnb_4bit_use_double_quant \
+  --bnb_4bit_compute_dtype bfloat16 \
+  --gradient_checkpointing
 """
 
 import argparse

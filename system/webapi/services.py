@@ -33,7 +33,7 @@ class RuntimeServices:
         project_root = Path(__file__).resolve().parents[2]
         self.qwen_model = os.getenv(
             "QWEN_MODEL_DIR",
-            str(project_root / "models" / "qwen3_core" / "model_assets" / "saya_rp_7b"),
+            str(project_root / "models" / "qwen3_core" / "model_assets" / "saya_rp_7b_v2"),
         )
         self.trans_base = os.getenv(
             "TRANS_MODEL_DIR",

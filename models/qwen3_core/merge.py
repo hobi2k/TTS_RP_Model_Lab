@@ -28,9 +28,9 @@ uv run models/qwen3_core/merge.py \
 
 while kill -0 1866426 2>/dev/null; do sleep 30; done
 uv run models/qwen3_core/merge.py \
-  --base_model models/qwen3_core/model_assets/YanoljaNEXT-EEVE-7B-v2_lora_sft1 \
-  --adapter_path models/qwen3_core/model_assets/YanoljaNEXT-EEVE-7B-v2_lora_stage2/lora_adapter \
-  --output_dir models/qwen3_core/model_assets/saya_rp_7b_v2_sft \
+  --base_model models/qwen3_core/model_assets/saya_rp_7b_v2_sft \
+  --adapter_path models/qwen3_core/model_assets/saya_rp_7b_v2_grpo \
+  --output_dir models/qwen3_core/model_assets/saya_rp_7b_v2 \
   --dtype bf16 \
   --device_map auto \
   --offload_dir /tmp/merge_offload \
@@ -137,7 +137,7 @@ def main() -> None:
     adapter_dir = Path(args.adapter_path)
     tokenizer_dir = adapter_dir.parent / "tokenizer"
     tokenizer = AutoTokenizer.from_pretrained(
-        str(tokenizer_dir),
+        str(adapter_dir),
         trust_remote_code=args.trust_remote_code,
     )
 
