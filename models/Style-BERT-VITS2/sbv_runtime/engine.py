@@ -2,13 +2,13 @@ from __future__ import annotations
 
 """
 uv run --active --no-sync python -m sbv_runtime \
-  --model_onnx model_assets/mai/mai_e100_s38000.onnx \
-  --config model_assets/mai/config.json \
-  --style_vectors model_assets/mai/style_vectors.npy \
+  --model_onnx model_assets/saya/saya_e150_s57000.onnx \
+  --config model_assets/saya/config.json \
+  --style_vectors model_assets/saya/style_vectors.npy \
   --bert_onnx_dir bert/deberta-v2-large-japanese-char-wwm-onnx \
   --text "今日はちょっと寒いな。今日、うちに来る？" \
-  --out_wav outputs/sbv_runtime_mai.wav \
-  --speaker_name mai \
+  --out_wav outputs/sbv_runtime_saya.wav \
+  --speaker_name saya \
   --device cpu
 """
 

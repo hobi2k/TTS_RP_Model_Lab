@@ -382,28 +382,32 @@ uv run models/qwen3_core/infer_translate_lora.py \
 
 ## 3-3. 일본어 TTS 모델 (Style-Bert-VITS2)
 
-작업 디렉터리는 `models/sbv2_core` 기준입니다.
+기준 날짜: `2026-03-01`
 
-이 TTS 파이프라인은 `litagin02/Style-Bert-VITS2`의 original SBV2 파이프라인을 복구한 상태를 기준으로 구성했습니다.
-그 위에 이 저장소에서 필요한 최소 확장만 유지했습니다.
-- 프로세스 상주시켜 재로딩 오버헤드를 줄이는 `worker` 런타임 (`sbv2_worker.py`)
-- ONNX만으로 실행 가능한 독립형 `sbv_runtime` (`models/sbv2_core/sbv_runtime`)
+현재 운영 기준 작업 디렉터리는 `models/Style-BERT-VITS2`입니다.
 
-RTX 5080 환경 메모:
-- CUDA/torch 호환성 이슈 때문에 `models/sbv2_core` 내부에서 용도별 가상환경을 분리해 실험했습니다.
-- 사용한 구조:
-  - `.venv`: 기본 실험 환경
-  - `.venv-cpu`: CPU/호환성 검증용
-  - `.venv-stylegen`: 스타일 생성/부가 실험용
-- 이 전제에 맞춰 `models/sbv2_core/requirements*.txt`와 `models/sbv2_core/pyproject.toml`은 `torch 비강제` 형태로 정리되어 있습니다.
+현행 파이프라인은 `litagin02/Style-Bert-VITS2` 복구본을 `models/Style-BERT-VITS2`에 정리한 뒤, 이 저장소의 런타임 요구사항만 최소한으로 추가한 구조입니다.
+- 상주 워커: `models/Style-BERT-VITS2/sbv2_worker.py`
+- ONNX 전용 런타임: `models/Style-BERT-VITS2/sbv_runtime`
+- 시스템 연동 진입점: `system/tts_worker_client.py`
 
-## A) 초기화
+RTX 5080 / WSL 기준 메모:
+- `models/Style-BERT-VITS2` 내부 별도 `venv`를 기준으로 설치/실행합니다.
+- `uv run --active --no-sync ...` 형태로 기존 환경을 재사용하는 흐름을 우선 사용합니다.
+- `onnxruntime`, `av`, `faster-whisper`는 Python 3.10 호환 버전으로 고정해 운용합니다.
+
+레거시 경로:
+- `models/sbv2_core`
+- 과거 실험용 래퍼/변환 스크립트 보관용으로만 취급합니다.
+- 신규 학습, ONNX 변환, 워커 실행, 런타임 검증은 더 이상 이 경로를 기준으로 하지 않습니다.
+
+## A) 초기화(레거시)
 ```bash
 cd models/sbv2_core
 uv run initialize.py
 ```
 
-## B) 전처리
+## B) 전처리(레거시)
 ```bash
 uv run preprocess_all.py \
   --model_name mai \
@@ -412,7 +416,7 @@ uv run preprocess_all.py \
   --use_jp_extra
 ```
 
-## C) 학습
+## C) 학습(레거시)
 JP-Extra 학습 예시:
 ```bash
 torchrun --nproc_per_node=1 train_ms_jp_extra.py \
@@ -422,13 +426,13 @@ torchrun --nproc_per_node=1 train_ms_jp_extra.py \
 ```
 
 ## D) PyTorch 추론 테스트
-스크립트: `run_infer.py`
+스크립트: `server_editor.py` 또는 `inference.py`
 
 ```bash
 uv run run_infer.py
 ```
 
-## E) ONNX 변환
+## E) ONNX 변환(레거시)
 TTS 본체 ONNX:
 ```bash
 uv run convert_onnx.py --model model_assets/tts/mai/mai_e281_s263000.safetensors
@@ -438,11 +442,6 @@ BERT ONNX:
 ```bash
 uv run convert_bert_onnx.py --language JP
 ```
-
-중요 주의사항 (BERT ONNX FP16):
-- DeBERTa v2 계열에서 `model_fp16.onnx` 생성 후 타입 불일치(`Cast_output_0`)가 자주 발생합니다.
-- 실사용은 `model.onnx`(FP32)로 진행하는 것이 안정적입니다.
-- `model_fp16.onnx`가 깨졌다면 삭제하고 FP32만 사용하세요.
 
 ## F) ONNX 전용 독립 런타임(sbv_runtime)
 디렉터리: `models/sbv2_core/sbv_runtime`
@@ -465,9 +464,15 @@ uv run python -m sbv_runtime \
   --device cpu
 ```
 
-`--bert_onnx_dir`에는 아래가 같이 있어야 합니다.
-- `model.onnx` (또는 정상 동작하는 `model_fp16.onnx`)
-- tokenizer 파일들 (`tokenizer.json` 등)
+## G) 현재 시스템 연동 워크플로우
+1. `system/tts_worker_client.py`가 `models/Style-BERT-VITS2/sbv2_worker.py`를 서브프로세스로 실행합니다.
+2. `sbv2_worker.py`가 `saya` 또는 `mai`용 ONNX 모델을 1회 로드합니다.
+3. 워커는 `sbv_runtime.engine.build_runtime(...)`으로 ONNX Runtime + BERT ONNX 경로를 고정합니다.
+4. 요청 payload(`text`, `style`, `style_weight`, `speaker_name`)를 stdin JSON으로 받습니다.
+5. `runtime.model.infer(...)`로 추론 후 `outputs/tts_*.wav`를 생성합니다.
+6. 생성된 wav 경로를 stdout JSON으로 반환하고, WebAPI/CLI가 그 경로를 소비합니다.
+
+`--bert_onnx_dir`에는 ONNX 모델 파일이 있어야 하고, `--bert_tokenizer_dir`에는 tokenizer 파일(`tokenizer.json` 등)이 있어야 합니다.
 
 ## G) sbv2_core 의존성 설치 가이드
 

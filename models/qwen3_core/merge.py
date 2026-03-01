@@ -20,7 +20,7 @@ uv run models/qwen3_core/merge.py \
 uv run models/qwen3_core/merge.py \
   --base_model models/qwen3_core/model_assets/qwen3-1.7b-base \
   --adapter_path models/qwen3_core/model_assets/qwen3_1.7_ko2ja_lora/lora_adapter \
-  --output_dir models/qwen3_core/model_assets/qtranslator_1.7b \
+  --output_dir models/qwen3_core/model_assets/qtranslator_1.7b_v2 \
   --dtype bf16 \
   --device_map auto \
   --safe_serialization \
@@ -137,7 +137,7 @@ def main() -> None:
     adapter_dir = Path(args.adapter_path)
     tokenizer_dir = adapter_dir.parent / "tokenizer"
     tokenizer = AutoTokenizer.from_pretrained(
-        str(adapter_dir),
+        str(tokenizer_dir),
         trust_remote_code=args.trust_remote_code,
     )
 

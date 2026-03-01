@@ -23,7 +23,7 @@ class KoJaTranslator:
         self.model_dir = str(
             Path(model_dir)
             if model_dir is not None
-            else project_root / "models" / "qwen3_core" / "model_assets" / "qtranslator_1.7b"
+            else project_root / "models" / "qwen3_core" / "model_assets" / "qtranslator_1.7b_v2"
         )
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.instruction = instruction or self.DEFAULT_INSTRUCTION
