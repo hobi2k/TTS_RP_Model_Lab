@@ -341,6 +341,7 @@ def build_demo(base_url: str) -> gr.Blocks:
             "",
             "",
             history or [],
+            gr.update(value="", interactive=True),
         )
 
     def mainloop_turn(user_text: str, speaker_name: str, history: list[dict[str, Any]]):
@@ -391,6 +392,7 @@ def build_demo(base_url: str) -> gr.Blocks:
             "",
             "",
             old_history,
+            gr.update(value="", interactive=True),
         )
 
         full_dialogue_ko = rec_full["dialogue_ko"] or ""
@@ -407,6 +409,7 @@ def build_demo(base_url: str) -> gr.Blocks:
                 "",
                 "",
                 old_history,
+                gr.update(value="", interactive=True),
             )
             time.sleep(0.016)
 
@@ -421,6 +424,7 @@ def build_demo(base_url: str) -> gr.Blocks:
             body.get("dialogue_ja", ""),
             body.get("wav_path", ""),
             new_history,
+            gr.update(value="", interactive=True),
         )
 
     def reset_scene():
@@ -434,6 +438,7 @@ def build_demo(base_url: str) -> gr.Blocks:
             "",
             "",
             [],
+            gr.update(value="", interactive=True),
         )
 
     def chat_api(user_text: str) -> str:
@@ -534,19 +539,19 @@ def build_demo(base_url: str) -> gr.Blocks:
         run_btn.click(
             mainloop_turn,
             inputs=[user_input, speaker_name, history_state],
-            outputs=[stage_html, audio_hidden, transcript, dbg_rp, dbg_narr, dbg_dko, dbg_dja, dbg_wav, history_state],
+            outputs=[stage_html, audio_hidden, transcript, dbg_rp, dbg_narr, dbg_dko, dbg_dja, dbg_wav, history_state, user_input],
             show_progress="hidden",
         )
         user_input.submit(
             mainloop_turn,
             inputs=[user_input, speaker_name, history_state],
-            outputs=[stage_html, audio_hidden, transcript, dbg_rp, dbg_narr, dbg_dko, dbg_dja, dbg_wav, history_state],
+            outputs=[stage_html, audio_hidden, transcript, dbg_rp, dbg_narr, dbg_dko, dbg_dja, dbg_wav, history_state, user_input],
             show_progress="hidden",
         )
 
         reset_btn.click(
             reset_scene,
-            outputs=[stage_html, audio_hidden, transcript, dbg_rp, dbg_narr, dbg_dko, dbg_dja, dbg_wav, history_state],
+            outputs=[stage_html, audio_hidden, transcript, dbg_rp, dbg_narr, dbg_dko, dbg_dja, dbg_wav, history_state, user_input],
             show_progress="hidden",
         )
 

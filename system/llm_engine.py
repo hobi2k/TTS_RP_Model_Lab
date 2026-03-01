@@ -19,6 +19,7 @@ import re
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from peft import PeftModel
+from vllm import LLM
 
 
 @dataclass
@@ -88,9 +89,8 @@ class QwenEngine:
         self.backend = "hf"
 
     def _init_vllm(self) -> None:
-        from vllm import LLM
 
-        gpu_mem_util = float(os.getenv("VLLM_GPU_MEMORY_UTILIZATION", "0.90"))
+        gpu_mem_util = float(os.getenv("VLLM_GPU_MEMORY_UTILIZATION", "0.85"))
         max_model_len_env = os.getenv("VLLM_MAX_MODEL_LEN")
         # 7B + 단일 GPU 환경에서 32768 기본값은 KV cache OOM을 유발하기 쉬워
         # 보수적인 기본값(1536)으로 시작한다.

@@ -91,6 +91,8 @@ class SummaryMemoryChain:
         self._sqlite_vec_loaded = False
         if sqlite_vec is not None:
             try:
+                # sqlite-vec는 load_extension 권한이 필요하다.
+                self.conn.enable_load_extension(True)
                 sqlite_vec.load(self.conn)
                 self._sqlite_vec_loaded = True
             except Exception:
