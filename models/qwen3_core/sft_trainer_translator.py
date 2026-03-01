@@ -115,7 +115,7 @@ def tokenize_function(
         full_text = prompt + (out or "").strip() + eos
         texts.append(full_text)
 
-        # 🔥 Output 시작 위치 계산 (토큰 단위)
+        # Output 시작 위치 계산
         prompt_ids = tokenizer(
             prompt,
             add_special_tokens=False,
