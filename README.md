@@ -384,8 +384,8 @@ uv run models/qwen3_core/infer_translate_lora.py \
 
 작업 디렉터리는 `models/sbv2_core` 기준입니다.
 
-이 TTS 파이프라인은 `litagin02/Style-Bert-VITS2` 기반으로 구성했습니다.
-또한 이 저장소에서는 실사용 편의를 위해 다음을 추가했습니다.
+이 TTS 파이프라인은 `litagin02/Style-Bert-VITS2`의 original SBV2 파이프라인을 복구한 상태를 기준으로 구성했습니다.
+그 위에 이 저장소에서 필요한 최소 확장만 유지했습니다.
 - 프로세스 상주시켜 재로딩 오버헤드를 줄이는 `worker` 런타임 (`sbv2_worker.py`)
 - ONNX만으로 실행 가능한 독립형 `sbv_runtime` (`models/sbv2_core/sbv_runtime`)
 
@@ -635,13 +635,12 @@ PYTORCH_ALLOC_CONF=expandable_segments:True uv run ...
   - 일반 일본어 구어체 데이터로 학습되었으므로 특정 캐릭터의 말투에 맞추어져 있지 않습니다.
 - SBV2 모델은 자체적인 생성 데이터셋으로 학습되었습니다.
   - 오리지날 `litagin02/Style-Bert-VITS2`의 사전학습 모델을 사용하지 않았습니다.
-  - 추후 성능 향상을 위해 오리지날 파이프라인으로 변경 예정입니다.
+  - 현재 코드베이스는 오리지날 SBV2 파이프라인을 복구한 상태를 기준으로 유지하고 있습니다.
 - 장기 기억을 위해 SQLite-vec이 사용되었습니다.
 
 ## 9) Planned Work
 
-- 향후 성능 향상을 위해 `litagin02/Style-Bert-VITS2`의 original SBV 파이프라인을 복원할 예정입니다.
-- 그 위에 이 저장소에서 필요한 최소 확장만 유지합니다:
+- 현재 `litagin02/Style-Bert-VITS2`의 original SBV 파이프라인을 복구한 상태이며, 아래 확장을 유지합니다:
   - `worker` 기반 상주 실행 경로 추가
   - ONNX 전용 독립 런타임 추가
 
@@ -653,4 +652,5 @@ PYTORCH_ALLOC_CONF=expandable_segments:True uv run ...
 - Tri-7B (Trillion Labs) Hugging Face: https://huggingface.co/trillionlabs/Tri-7B
 - Embedding model (BAAI BGE-M3) Hugging Face: https://huggingface.co/BAAI/bge-m3
 - Style-Bert-VITS2 (base TTS pipeline) GitHub: https://github.com/litagin02/Style-Bert-VITS2
+- Style-BERT-VITS2-GeneLab-Blackwell (hiroki-abe-58) GitHub: https://github.com/hiroki-abe-58/Style-BERT-VITS2-GeneLab-Blackwell
 - ComfyUI VNCCS (hobi2k) GitHub: https://github.com/hobi2k/ComfyUI_VNCCS
