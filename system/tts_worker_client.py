@@ -1,4 +1,3 @@
-# system/tts_worker_client.py
 """
 SBV2 Worker Client
 
@@ -43,7 +42,7 @@ class SBV2WorkerClient:
         self.worker_path = (
             Path(__file__).resolve().parent.parent
             / "models"
-            / "sbv2_core"
+            / "Style-BERT-VITS2"
             / "sbv2_worker.py"
         )
 
