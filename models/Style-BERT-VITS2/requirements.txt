@@ -6,6 +6,7 @@ accelerate
 av==12.3.0
 cmudict
 cn2an
+fastapi
 faster-whisper>=1.0.0
 g2p_en
 GPUtil
@@ -13,16 +14,19 @@ gradio>=4.32
 jieba
 librosa==0.9.2
 loguru
+matplotlib
 nltk<=3.8.1
 num2words
+numba
 numpy<2
 onnx
 onnxconverter-common
-onnxruntime
+onnxruntime<1.24
 onnxruntime-directml; sys_platform == 'win32'
 onnxruntime-gpu; sys_platform != 'darwin'
 onnxsim-prebuilt
 protobuf==4.25
+pydantic>=2.0
 psutil
 punctuators
 pyannote.audio>=3.1.0
@@ -30,9 +34,16 @@ pyloudnorm
 pyopenjtalk-dict
 pypinyin
 pyworld-prebuilt
+requests
+safetensors
+scikit-learn
+scipy
+soundfile
+soxr
 stable_ts
 tensorboard
 torch<2.4
 torchaudio<2.4
-transformers
+transformers<4.55
 umap-learn
+uvicorn

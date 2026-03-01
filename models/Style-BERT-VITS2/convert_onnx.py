@@ -262,6 +262,7 @@ if __name__ == "__main__":
                         noise_scale_w,
                     ),
                     f=str(onnx_temp_model_path),
+                    dynamo=False,
                     verbose=False,
                     input_names=[
                         "x_tst",
@@ -355,6 +356,7 @@ if __name__ == "__main__":
                         noise_scale_w,
                     ),
                     f=str(onnx_temp_model_path),
+                    dynamo=False,
                     verbose=False,
                     input_names=[
                         "x_tst",

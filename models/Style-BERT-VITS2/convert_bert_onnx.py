@@ -308,6 +308,7 @@ if __name__ == "__main__":
             inputs["attention_mask"],
         ),
         f=str(onnx_temp_model_path),
+        dynamo=False,
         verbose=False,
         input_names=[
             "input_ids",

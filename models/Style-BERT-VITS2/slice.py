@@ -1,5 +1,6 @@
 import argparse
 import shutil
+from dataclasses import dataclass
 from pathlib import Path
 from queue import Queue
 from threading import Thread
@@ -7,11 +8,64 @@ from typing import Any, Optional
 
 import soundfile as sf
 import torch
+import torchaudio
 from tqdm import tqdm
 
 from config import get_path_config
 from style_bert_vits2.logging import logger
 from style_bert_vits2.utils.stdout_wrapper import SAFE_STDOUT
+
+
+# silero-vad still expects legacy torchaudio top-level I/O helpers that are
+# missing from recent nightly builds.
+if not hasattr(torchaudio, "AudioMetaData"):
+    @dataclass
+    class AudioMetaData:  # pragma: no cover - compatibility shim
+        sample_rate: int
+        num_frames: int
+        num_channels: int
+        bits_per_sample: int
+        encoding: str
+
+    torchaudio.AudioMetaData = AudioMetaData  # type: ignore[attr-defined]
+
+if not hasattr(torchaudio, "list_audio_backends"):
+    torchaudio.list_audio_backends = lambda: ["soundfile"]  # type: ignore[attr-defined]
+
+if not hasattr(torchaudio, "get_audio_backend"):
+    torchaudio.get_audio_backend = lambda: "soundfile"  # type: ignore[attr-defined]
+
+if not hasattr(torchaudio, "set_audio_backend"):
+    torchaudio.set_audio_backend = lambda backend: None  # type: ignore[attr-defined]
+
+if not hasattr(torchaudio, "info"):
+    def _compat_info(path: str) -> AudioMetaData:
+        info = sf.info(path)
+        subtype = info.subtype or ""
+        bits = int("".join(ch for ch in subtype if ch.isdigit()) or 0)
+        return AudioMetaData(
+            sample_rate=info.samplerate,
+            num_frames=info.frames,
+            num_channels=info.channels,
+            bits_per_sample=bits,
+            encoding=subtype or "UNKNOWN",
+        )
+
+    torchaudio.info = _compat_info  # type: ignore[attr-defined]
+
+if not hasattr(torchaudio, "_original_load"):
+    torchaudio._original_load = torchaudio.load  # type: ignore[attr-defined]
+
+
+def _compat_load(
+    path: str, *args: Any, **kwargs: Any
+) -> tuple[torch.Tensor, int]:
+    data, sample_rate = sf.read(path, always_2d=True, dtype="float32")
+    waveform = torch.from_numpy(data.T.copy())
+    return waveform, int(sample_rate)
+
+
+torchaudio.load = _compat_load  # type: ignore[assignment]
 
 
 def is_audio_file(file: Path) -> bool:
