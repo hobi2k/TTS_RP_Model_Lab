@@ -7,10 +7,6 @@ SBV2 Worker Client
 - 이후 speak(text) 호출마다
   → JSON을 stdin으로 보내고
   → wav 결과를 stdout으로 받음
-
-즉:
-이 클래스는 "무거운 TTS 엔진을 계속 띄워둔 채"
-"가벼운 RPC 클라이언트"처럼 동작한다.
 """
 
 from __future__ import annotations
@@ -90,7 +86,6 @@ class SBV2WorkerClient:
             line = line.strip()
 
             # 워커 로그를 그대로 출력
-            # (디버깅용, 없어도 무방)
             print(f"[SBV2_WORKER] {line}")
 
             # 워커에서 명시적으로 출력한 준비 완료 신호
@@ -151,7 +146,7 @@ class SBV2WorkerClient:
 
             line = line.strip()
 
-            # JSON이 아닌 것은 로그 → 무시
+            # JSON이 아닌 것은 로그 -> 무시
             if not line.startswith("{"):
                 print(f"[SBV2_WORKER] {line}")
                 continue
