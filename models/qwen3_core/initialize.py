@@ -21,11 +21,9 @@ from pathlib import Path
 from huggingface_hub import snapshot_download
 from transformers import AutoTokenizer
 
-# =========================
 # 저장 경로(중요)
 # - 이 파일이 models/qwen3_core/ 안에 있다고 가정한다.
 # - model_assets도 qwen3_core/ 안에 고정한다.
-# =========================
 
 QWEN3_CORE_DIR = Path(__file__).resolve().parent                 # .../models/qwen3_core
 MODEL_ASSETS_DIR = QWEN3_CORE_DIR / "model_assets"              # .../models/qwen3_core/model_assets
@@ -35,6 +33,7 @@ MODELS = {
     # "qwen3-1.7b-base": "Qwen/Qwen3-1.7B-Base",
     # "qwen3-4b-instruct": "Qwen/Qwen3-4B-Instruct-2507",
     "qwen3-8b": "Qwen/Qwen3-8B",
+    "YanoljaNEXT-EEVE-7B-v2": "yanolja/YanoljaNEXT-EEVE-Instruct-7B-v2-Preview",
 }
 
 

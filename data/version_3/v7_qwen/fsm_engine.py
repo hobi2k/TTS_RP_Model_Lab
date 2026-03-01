@@ -1,13 +1,9 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 """
 v7_qwen_fsm_engine.py
-=========================================================
+
 Qwen VN FSM Engine
 - ScenarioBook 기반 전역 규칙 파싱
 - 상태 FSM + 전역 헌법 병합
-=========================================================
 """
 
 from __future__ import annotations
@@ -20,7 +16,6 @@ from typing import Dict, Any
 class QwenFSMEngine:
     """FSM 규칙을 해석하고 상태 전이를 계산하는 엔진 클래스다."""
 
-
     def __init__(self, fsm_yaml_path: str, system_lore: str):
         """내부 헬퍼로 `__init__` 계산 절차를 수행한다."""
         with open(fsm_yaml_path, "r", encoding="utf-8") as f:
@@ -31,7 +26,7 @@ class QwenFSMEngine:
         self.transitions: Dict[str, Any] = self.spec.get("transitions", {})
         self.state_flags: Dict[str, Dict[str, Any]] = self.spec.get("state_flags", {})
 
- # 시나리오북에서 뽑은 절대 규칙
+        # 시나리오북에서 뽑은 절대 규칙
         self.global_flags: Dict[str, Any] = self._parse_global_flags(system_lore)
         self.relation_status: str = self._parse_relation_status(system_lore)
 
@@ -41,9 +36,6 @@ class QwenFSMEngine:
         현재 FSM 상태 조회
 
         내부 상태 머신이 유지 중인 현재 상태 이름을 반환한다.
-
-        Args:
-            없음.
 
         Returns:
             str: 현재 상태 키.
@@ -57,9 +49,6 @@ class QwenFSMEngine:
         상태별 플래그와 시나리오북 전역 플래그를 합쳐
         현재 턴에서 사용할 최종 플래그 딕셔너리를 만든다.
 
-        Args:
-            없음.
-
         Returns:
             Dict[str, Any]: 현재 상태에 적용할 플래그 집합.
         """
@@ -68,7 +57,7 @@ class QwenFSMEngine:
         # 1) 상태별 규칙
         flags.update(self.state_flags.get(self.state, {}))
 
-        # 2) 전역 규칙은 무조건 덮어씀 (헌법)
+        # 2) 전역 규칙은 무조건 덮어씀
         for k, v in self.global_flags.items():
             flags[k] = v
 

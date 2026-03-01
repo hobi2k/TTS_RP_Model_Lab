@@ -1,15 +1,11 @@
 """
 VN-GRADE RP SYSTEM SCENARIO BOOK GENERATOR (SYSTEM ONLY)
 
-Run:
+사용 예시:
   uv run data/v5_gpt_charcard_gen.py \
     --model gpt-5-mini \
     --out_path /mnt/d/rp_data/qwen/rp_scenario.jsonl \
     --samples 50000
-
-- 상황 요약의 예시는 다음과 같다:
-    사야는 예상하지 못한 {{user}}의 고백에 놀란 상태이다.
-    {{user}}는 사야를 향한 자신의 감정을 계속해서 전한다.
 """
 import os
 import json
@@ -43,7 +39,6 @@ SPEECH_STYLE_OPTIONS = ["존댓말", "반말"]
 SPEECH_STYLE_WEIGHTS = [0.5, 0.5]
 
 # 연애 / 육성 / 정신붕괴 전용
-
 SCENARIO_BOOK_GENERATOR = """
 당신은 한국어 비주얼 노벨을 위한
 완성형 롤플레잉 시나리오북을 작성한다.

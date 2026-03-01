@@ -27,9 +27,7 @@ except Exception:
     load_dotenv = None
 
 
-# ==============================
 # 설정부
-# ==============================
 BASE_DIR = Path("/mnt/d/rp_data")
 INPUT_JSONL_PATH = BASE_DIR / "qwen/rp_datum.jsonl"
 OUTPUT_JSONL_PATH = BASE_DIR / "trans/ko-ja_rpdatum_gpt.jsonl"
@@ -56,9 +54,7 @@ SAVE_EVERY = 50  # 몇 개 샘플마다 progress 저장
 MAX_TRANSLATE_RETRIES = 5
 
 
-# ==============================
 # 유틸 함수
-# ==============================
 
 RE_QUOTE = re.compile(r'"([^"]+)"')
 RE_HANGUL = re.compile(r"[가-힣ㄱ-ㅎㅏ-ㅣ]")
@@ -170,9 +166,7 @@ def load_existing_keys() -> set[str]:
     return keys
 
 
-# ==============================
 # 메인 변환 로직 (resume)
-# ==============================
 
 def convert_jsonl_resume():
     prog = load_progress()

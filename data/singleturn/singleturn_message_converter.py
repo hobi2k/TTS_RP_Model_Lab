@@ -1,4 +1,5 @@
 """
+사용 예시:
 uv run data/singleturn/singleturn_message_converter.py \
   --in_path /mnt/d/rp_data/singleturn/rp_generated_local.jsonl \
   --out_path /mnt/d/rp_data/singleturn/rp_generated_local_cleaned.jsonl
@@ -16,7 +17,7 @@ from typing import Dict, Any
 
 def convert_record(rec: Dict[str, Any]) -> Dict[str, Any]:
     """
-    system / user / assistant_raw → messages[] singleton SFT format
+    system / user / assistant_raw -> messages[] singleton SFT format
     """
     system = rec.get("system")
     user = rec.get("user")
@@ -57,8 +58,8 @@ def main(in_path: str, out_path: str):
             except Exception as e:
                 raise RuntimeError(f"{line_no}번째 줄 처리 실패: {e}")
 
-    print(f"✅ 변환 완료: {converted} samples")
-    print(f"📄 출력 파일: {out_path}")
+    print(f"변환 완료: {converted} samples")
+    print(f"출력 파일: {out_path}")
 
 
 if __name__ == "__main__":

@@ -10,7 +10,7 @@ jsonl_to_translation_sft.py
 핵심 설계 원칙:
 1. system / user / 서술 완전 제거
 2. assistant의 큰따옴표(" ") 대사만 사용
-3. 1 input (ko) → 1 output (jp)
+3. 1 input (ko) -> 1 output (jp)
 4. RP 문맥 / 캐릭터 / 감정 정보 미주입
 """
 
@@ -22,9 +22,7 @@ from typing import Optional
 from openai import OpenAI
 
 
-# ==============================
 # 설정부
-# ==============================
 BASE_DIR = Path("/mnt/d/rp_data")
 INPUT_JSONL_PATH = BASE_DIR / "rp_generated.jsonl"
 OUTPUT_JSONL_PATH = BASE_DIR / "ko-ja_translation_sft.jsonl"
@@ -41,9 +39,7 @@ MODEL_NAME = "yanolja/EEVE-Korean-Instruct-7B-v2.0"
 SAVE_EVERY = 50  # 몇 개 샘플마다 progress 저장
 
 
-# ==============================
 # 유틸 함수
-# ==============================
 
 RE_QUOTE = re.compile(r'"([^"]+)"')
 
@@ -127,9 +123,7 @@ def load_existing_keys() -> set[str]:
     return keys
 
 
-# ==============================
 # 메인 변환 로직 (resume)
-# ==============================
 
 def convert_jsonl_resume():
     prog = load_progress()

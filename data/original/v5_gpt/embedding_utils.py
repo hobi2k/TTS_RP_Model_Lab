@@ -63,7 +63,6 @@ class EmbeddingMemory:
         return emb.cpu().numpy()[0]
 
     # Repetition Check
-
     def is_repetitive(
         self,
         text: str,

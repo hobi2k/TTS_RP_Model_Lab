@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 """QWEN 기반 v6 멀티턴 생성 파이프라인."""
 
 from __future__ import annotations
@@ -461,7 +458,7 @@ def build_graph(
         # v5 동작과 동일하게 user 생성 샘플링을 고정한다.
         log_step("GEN_USER", "sampling=temp:0.65,top_p:0.85")
 
-        # task는 user role로 주입한다 (system으로 넣지 말 것)
+        # task는 user role로 주입한다
         raw = generate_text(
             model=model,
             tokenizer=tokenizer,
@@ -983,7 +980,7 @@ def build_graph(
                 reason=state["error"],
             )
             return state
-        # MOD(중요): kind별 repetition 검사, keyword-only 준수
+        # kind별 repetition 검사, keyword-only 준수
         state["narration_text"] = narr
         state["dialogue_text"] = dia
         state["assistant_text"] = merged
@@ -1259,7 +1256,7 @@ def build_graph(
             return state
 
         state["assistant_text"] = text
-        # CRISIS는 narration/dialogue 분리 안함(자유형)
+        # CRISIS는 narration/dialogue 분리 안함
         state["narration_text"] = ""
         state["dialogue_text"] = ""
         embed_memory.add(text, kind="assistant")
@@ -2176,7 +2173,7 @@ def build_graph(
     g.add_node("GEN_USER", gen_user_node)
     g.add_node("GEN_USER_SEXUAL", gen_user_sexual_node)
     g.add_node("DETECT", detect_node)
-    g.add_node("GEN_ASSISTANT", gen_assistant_node)  # MOD: 통합 생성 노드
+    g.add_node("GEN_ASSISTANT", gen_assistant_node)  # 통합 생성 노드
     g.add_node("GEN_ASSISTANT_REWRITE", gen_assistant_rewrite_node)
     g.add_node("EVAL_DIALOGUE_QUALITY", eval_dialogue_quality_node)
     g.add_node("GEN_CRISIS", gen_crisis_node)
@@ -2276,7 +2273,7 @@ def run_scenario(
     act_path = action_fsm_path or "data/version_3/v7_qwen/action_fsm.yaml"
     fsm_act = QwenFSMEngine(act_path, system_lore)
 
-    # MOD: device 자동 선택(모델 device_map="auto" 고려)
+    # device 자동 선택(모델 device_map="auto" 고려)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     embed_memory = EmbeddingMemory("data/embedding/BGE-m3-ko", device=device)

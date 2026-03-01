@@ -58,7 +58,7 @@ class SummaryMemoryConfig:
 
     enabled: bool = True
     update_every_turns: int = 1
-    max_summary_chars: int = 900
+    max_summary_chars: int = 700
     db_path: str | None = None
     session_id: str = "default"
     recent_turn_window: int = 6

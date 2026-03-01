@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 """
 Scenario book -> multi-turn pipeline runner (one-by-one).
 
@@ -10,7 +7,7 @@ then repeats until samples are filled.
 models/qwen3_core/model_assets/qwen-8b
 data/generator/Tri-7B
 
-Example:
+사용 예시:
   uv run data/version_3/v7_qwen/pipeline.py \
     --model_path data/generator/Tri-7B \
     --scenario_out /mnt/d/rp_data/v7/v3_scenario.jsonl \

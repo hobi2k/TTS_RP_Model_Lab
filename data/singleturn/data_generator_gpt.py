@@ -6,6 +6,7 @@ GPT 기반 싱글턴 RP 생성기.
 - 최종 출력 스키마:
   {system, user, assistant_raw, scene}
 
+사용 예시:
 uv run data/singleturn/data_generator_gpt.py \
   --out_path /mnt/d/rp_data/singleturn/rp_generated.jsonl \
   --progress_path /mnt/d/rp_data/singleturn/rp_generated.progress.json \

@@ -107,6 +107,7 @@ class SBV2WorkerClient:
         text: str,
         style_index: int = 0,
         style_weight: float = 1.0,
+        speaker_name: str = "saya",
     ) -> str:
         """
         TTS 요청을 워커에 보내고
@@ -132,6 +133,7 @@ class SBV2WorkerClient:
             "text": text,
             "style": style_index,
             "style_weight": style_weight,
+            "speaker_name": speaker_name,
         }
 
         # 요청 전송 (stdin → worker)

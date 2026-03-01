@@ -1,5 +1,7 @@
 from __future__ import annotations
 """
+
+사용 예시:
 uv run python -m data.rewrite.rewrite_with_local_llm \
   --input /mnt/d/rp_data/singleturn/rp_singleturn_cleaned.jsonl \
   --output /mnt/d/rp_data/rewrite/singleturn_rewrite.local.jsonl \

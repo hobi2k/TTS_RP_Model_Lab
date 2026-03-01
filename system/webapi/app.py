@@ -96,7 +96,12 @@ def parse(req: ParseRequest):
 @app.post("/api/tts", response_model=TTSResponse)
 def tts(req: TTSRequest):
     try:
-        wav_path = services.tts(req.text_ja, style_index=req.style_index, style_weight=req.style_weight)
+        wav_path = services.tts(
+            req.text_ja,
+            style_index=req.style_index,
+            style_weight=req.style_weight,
+            speaker_name=req.speaker_name,
+        )
         return TTSResponse(wav_path=wav_path)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"tts failed: {e}")
@@ -105,7 +110,12 @@ def tts(req: TTSRequest):
 @app.post("/api/turn", response_model=TurnResponse)
 def turn(req: TurnRequest):
     try:
-        result = services.turn(req.text_ko, style_index=req.style_index, style_weight=req.style_weight)
+        result = services.turn(
+            req.text_ko,
+            style_index=req.style_index,
+            style_weight=req.style_weight,
+            speaker_name=req.speaker_name,
+        )
         return TurnResponse(**result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"turn failed: {e}")
@@ -114,7 +124,12 @@ def turn(req: TurnRequest):
 @app.post("/api/main-loop", response_model=TurnResponse)
 def main_loop(req: TurnRequest):
     try:
-        result = services.turn(req.text_ko, style_index=req.style_index, style_weight=req.style_weight)
+        result = services.turn(
+            req.text_ko,
+            style_index=req.style_index,
+            style_weight=req.style_weight,
+            speaker_name=req.speaker_name,
+        )
         return TurnResponse(**result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"main-loop failed: {e}")

@@ -49,16 +49,16 @@ uv run models/qwen3_core/sft_trainer_qlora.py \
   --assistant_only_loss
 
 uv run models/qwen3_core/sft_trainer_qlora.py \
-  --model_name models/qwen3_core/model_assets/saya_rp_4b \
+  --model_name models/qwen3_core/model_assets/YanoljaNEXT-EEVE-7B-v2 \
   --data_path /mnt/d/rp_data/rewrite/singleturn_rewrite.jsonl \
-  --output_dir models/qwen3_core/model_assets/saya_rp_4b_lora_stage1 \
+  --output_dir models/qwen3_core/model_assets/YanoljaNEXT-EEVE-7B-v2_lora_stage1 \
   --load_in_4bit \
   --bf16 \
   --gradient_checkpointing \
   --max_length 4096 \
   --per_device_train_batch_size 1 \
   --gradient_accumulation_steps 16 \
-  --num_train_epochs 8 \
+  --num_train_epochs 6 \
   --learning_rate 2e-5 \
   --warmup_ratio 0.05 \
   --save_steps 25 \
@@ -74,7 +74,7 @@ uv run models/qwen3_core/sft_trainer_qlora.py \
   --assistant_only_loss
   
 # Stage 2) Stage1 adapter를 로드해 멀티턴 데이터로 추가 학습
-while kill -0 502791 2>/dev/null; do sleep 30; done
+while kill -0 1786264 2>/dev/null; do sleep 30; done
 uv run models/qwen3_core/sft_trainer_qlora.py \
   --model_name models/qwen3_core/model_assets/qwen3-4b-instruct \
   --data_path /mnt/d/rp_data/v7/rp_datum_unite_cleaned.jsonl \
@@ -86,7 +86,7 @@ uv run models/qwen3_core/sft_trainer_qlora.py \
   --max_length 4096 \
   --per_device_train_batch_size 1 \
   --gradient_accumulation_steps 16 \
-  --num_train_epochs 4 \
+  --num_train_epochs 3 \
   --learning_rate 2e-5 \
   --warmup_ratio 0.05 \
   --save_steps 25 \
@@ -101,19 +101,18 @@ uv run models/qwen3_core/sft_trainer_qlora.py \
   --metric_for_best_model eval_loss \
   --assistant_only_loss
 
-while kill -0 115518 2>/dev/null; do sleep 30; done
+while kill -0 13237 2>/dev/null; do sleep 30; done
 uv run models/qwen3_core/sft_trainer_qlora.py \
-  --model_name models/qwen3_core/model_assets/saya_rp_4b \
+  --model_name models/qwen3_core/model_assets/YanoljaNEXT-EEVE-7B-v2_lora_sft1 \
   --data_path /mnt/d/rp_data/rewrite/multiturn_rewrite.jsonl \
-  --output_dir models/qwen3_core/model_assets/saya_rp_4b_lora_stage2 \
-  --init_adapter_path models/qwen3_core/model_assets/saya_rp_4b_lora_stage1/lora_adapter \
+  --output_dir models/qwen3_core/model_assets/YanoljaNEXT-EEVE-7B-v2_lora_stage2 \
   --load_in_4bit \
   --bf16 \
   --gradient_checkpointing \
   --max_length 4096 \
   --per_device_train_batch_size 1 \
   --gradient_accumulation_steps 16 \
-  --num_train_epochs 4 \
+  --num_train_epochs 3 \
   --learning_rate 2e-5 \
   --warmup_ratio 0.05 \
   --save_steps 25 \
@@ -357,7 +356,7 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(args.model_name, use_fast=True)
+    tokenizer = AutoTokenizer.from_pretrained(args.model_name, use_fast=True, fix_mistral_regex=True)
     tokenizer.pad_token = tokenizer.eos_token
 
     # Force-load local chat template file when available.

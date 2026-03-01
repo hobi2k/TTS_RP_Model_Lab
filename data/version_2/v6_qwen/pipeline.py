@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 """
 Scenario book -> multi-turn pipeline runner (one-by-one).
 

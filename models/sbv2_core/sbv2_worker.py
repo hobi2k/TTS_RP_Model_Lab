@@ -40,36 +40,29 @@ from style_bert_vits2.models.infer import get_net_g, infer
 # 현재 파일 기준 디렉토리 (sbv2_worker.py가 있는 위치)
 BASE_DIR = Path(__file__).resolve().parent
 
-# 학습된 TTS 모델 가중치
-MODEL_PATH = (
-    BASE_DIR
-    / "model_assets"
-    / "tts"
-    / "Saya"
-    / "Saya_e126_s117000.safetensors"
-)
-
-# 스타일 벡터 파일
-# - shape: (num_styles, style_dim)
-STYLE_PATH = (
-    BASE_DIR
-    / "model_assets"
-    / "tts"
-    / "Saya"
-    / "style_vectors.npy"
-)
-
 # 출력 wav 저장 디렉토리
 OUT_DIR = BASE_DIR / "outputs"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # CUDA 사용 가능 여부에 따라 디바이스 결정
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+DEFAULT_SPEAKER = "saya"
+
+MODEL_SPECS = {
+    "saya": {
+        "model_path": BASE_DIR / "model_assets" / "tts" / "Saya" / "Saya_e126_s117000.safetensors",
+        "style_path": BASE_DIR / "model_assets" / "tts" / "Saya" / "style_vectors.npy",
+    },
+    "mai": {
+        "model_path": BASE_DIR / "model_assets" / "tts" / "mai" / "mai_e281_s263000.safetensors",
+        "style_path": BASE_DIR / "model_assets" / "tts" / "mai" / "style_vectors.npy",
+    },
+}
 
 
-def resolve_config_path() -> Path:
+def resolve_config_path(model_path: Path) -> Path:
     """모델 폴더에서 config JSON을 우선 탐색하고 없으면 기본 경로를 사용한다."""
-    model_dir = MODEL_PATH.parent
+    model_dir = model_path.parent
     candidates = sorted(model_dir.glob("config.json"))
     if candidates:
         return candidates[0]
@@ -77,7 +70,7 @@ def resolve_config_path() -> Path:
 
 
 # TTS 엔진 로드 (프로세스 시작 시 단 1회)
-def load_engine():
+def load_engine(speaker_name: str):
     """
     Style-BERT-VITS2 추론에 필요한 모든 리소스를
     "한 번만" 로드하여 dict로 반환
@@ -90,9 +83,20 @@ def load_engine():
     - sid          : 화자 ID (멀티스피커 모델 대비)
     """
 
+    key = (speaker_name or DEFAULT_SPEAKER).strip().lower()
+    if key not in MODEL_SPECS:
+        raise ValueError(f"지원하지 않는 speaker_name: {speaker_name}. 사용 가능: {list(MODEL_SPECS.keys())}")
+    spec = MODEL_SPECS[key]
+    model_path = spec["model_path"]
+    style_path = spec["style_path"]
+    if not model_path.exists():
+        raise FileNotFoundError(f"모델 파일이 없습니다: {model_path}")
+    if not style_path.exists():
+        raise FileNotFoundError(f"style_vectors 파일이 없습니다: {style_path}")
+
     # 1) 하이퍼파라미터 로드
-    config_path = resolve_config_path()
-    print(f"[SBV2_WORKER] config 경로: {config_path}", flush=True)
+    config_path = resolve_config_path(model_path)
+    print(f"[SBV2_WORKER] speaker={key} config 경로: {config_path}", flush=True)
     hps = HyperParameters.load_from_json(str(config_path))
 
     # 2) Generator 네트워크 로드
@@ -101,7 +105,7 @@ def load_engine():
     # - safetensors 가중치 로드
     # - device 이동
     net_g = get_net_g(
-        model_path=str(MODEL_PATH),
+        model_path=str(model_path),
         version=hps.version,
         device=DEVICE,
         hps=hps,
@@ -110,7 +114,7 @@ def load_engine():
     # 3) 스타일 벡터 로드
     # shape 예:
     #   (N_styles, style_dim)
-    style_vectors = np.load(STYLE_PATH)
+    style_vectors = np.load(style_path)
 
     # 관례적으로 index 0을 mean / neutral style로 사용
     mean_style = style_vectors[0]
@@ -132,7 +136,7 @@ def load_engine():
         if key in lower_map:
             sid = lower_map[key]
             print(
-                f"[SBV2_WORKER] 화자 키 '{key}'를 사용합니다. "
+                f"[SBV2_WORKER] speaker={speaker_name} 화자 키 '{key}'를 사용합니다. "
                 f"사용 가능한 키: {list(spk2id.keys())}",
                 flush=True,
             )
@@ -160,6 +164,7 @@ def load_engine():
         )
 
     return {
+        "speaker_name": key,
         "hps": hps,
         "net_g": net_g,
         "style_vectors": style_vectors,
@@ -168,8 +173,26 @@ def load_engine():
     }
 
 
-# 엔진 초기화 (프로세스 시작 시 실행)
-ENGINE = load_engine()
+def swap_engine_if_needed(current_engine: dict, target_speaker: str) -> dict:
+    target = (target_speaker or DEFAULT_SPEAKER).strip().lower()
+    if target == current_engine.get("speaker_name"):
+        return current_engine
+
+    # 이전 모델 메모리 해제 후 새 모델 로드
+    try:
+        old = current_engine.get("net_g")
+        if old is not None:
+            del old
+        if DEVICE == "cuda":
+            torch.cuda.empty_cache()
+    except Exception:
+        pass
+    print(f"[SBV2_WORKER] speaker 변경: {current_engine.get('speaker_name')} -> {target}", flush=True)
+    return load_engine(target)
+
+
+# 엔진 초기화 (프로세스 시작 시 단일 화자 1개 로드)
+ENGINE = load_engine(DEFAULT_SPEAKER)
 
 # 외부 컨트롤러에게 "모델 로드 완료" 신호
 print("__SBV2_READY__", flush=True)
@@ -195,11 +218,18 @@ for line in sys.stdin:
         text = payload["text"]
         style_index = payload.get("style", 0)
         style_weight = payload.get("style_weight", 1.0)
+        speaker_name = payload.get("speaker_name", DEFAULT_SPEAKER)
+
+        # 화자 변경 요청 시 엔진 교체 로드
+        ENGINE = swap_engine_if_needed(ENGINE, speaker_name)
 
         # 2) 스타일 벡터 계산
         style_vectors = ENGINE["style_vectors"]
         mean_style = ENGINE["mean_style"]
 
+        style_index = int(style_index)
+        if style_index < 0 or style_index >= len(style_vectors):
+            raise IndexError(f"style index out of range: {style_index} (0..{len(style_vectors)-1})")
         target_style = style_vectors[style_index]
 
         # 스타일 보간 공식:

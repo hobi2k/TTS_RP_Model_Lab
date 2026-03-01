@@ -1,9 +1,6 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 """
 data/v5_gpt_multiturn_gen.py
-=========================================================
+
 LangGraph-orchestrated VN multi-turn generator (FSM-driven)
 (ROLE-SEPARATION HARDENED, NO "SIMPLIFY" REGRESSION)
 
@@ -13,7 +10,7 @@ LangGraph-orchestrated VN multi-turn generator (FSM-driven)
 - Evaluation: GPT API JSON scoring -> FSM inputs (no keyword rule scoring)
 - Memory: explicit summary + EmbeddingMemory (BGE-m3-ko) anti-repeat
 
-Run:
+사용 예시:
 uv run data/v5_gpt_multiturn_gen.py \
   --openai_model gpt-5-mini \
   --scenario_path /mnt/d/rp_data/gpt/rp_scenario.jsonl \
@@ -21,15 +18,12 @@ uv run data/v5_gpt_multiturn_gen.py \
   --fsm_path data/original/v5_qwen/state_fsm.yaml \
   --action_fsm_path data/original/v5_qwen/action_fsm.yaml \
   --turns 8
-=========================================================
 
-핵심 변경(요구사항 반영):
+핵심 변경:
 - 플레이어는 시나리오북에서 추출한 "플레이어 이름"을 사용한다.
 - 주인공은 시나리오북에서 추출한 "주인공 이름"을 사용한다.
 - 출력에 별표(*)/장식문자/괄호()/메타(FSM, system 등) 언급을 강하게 차단한다.
-- EmbeddingMemory.is_repetitive()는 keyword-only이므로 절대 positional로 넘기지 않는다.
-- (선택) 서술/대사 노드 분리를 "통합 생성 1회"로 변경하여 톤 싱크/비용을 최적화한다.
-  -> 다만 메모리(kind)는 narration/dialogue/assistant로 분리 저장한다.
+- EmbeddingMemory.is_repetitive()는 keyword-only이므로 절대 positional로 넘기지 않는다..
 """
 
 from __future__ import annotations
@@ -105,21 +99,10 @@ except ImportError:
 
 
 # REGEX / BASIC UTIL
-
 RE_JSON = re.compile(r"\{.*?\}", flags=re.DOTALL)
 
-# 별표(*)/장식문자와 메타 지시문 누출을 폭넓게 차단한다.
 
-# 장면 전환/선택지/요약 같은 메타 전개 문구를 차단한다.
-
-# Dialogue-leading directive labels (e.g., "요구: ...") that cause meta-like outputs.
-
-# Scenario/policy leakage lines that should never appear in dialogue output.
-
-# 괄호 금지 규칙 검출용 패턴.
-
-# 플레이어 이름 참조(기존 호환용).
-# Match formal endings without relying on word boundaries (Korean doesn't respect \b)
+# 플레이어 이름 참조
 PLAYER_NAME_CANDIDATES = ["하야토", "카즈키", "소마"]
 
 
@@ -266,7 +249,6 @@ def lane_required(fsm_state: str) -> Optional[str]:
     return fsm_state if fsm_state in LANE_EXAMPLES else None
 
 def _bm25_tokenize(text: str) -> List[str]:
-    """내부 보조 로직을 수행한다."""
     return re.findall(r"[가-힣A-Za-z0-9]+", (text or "").lower())
 
 _LANE_BM25: Dict[str, Any] = {}
@@ -278,7 +260,6 @@ if BM25Okapi is not None:
         _LANE_BM25[lane] = BM25Okapi(corpus)
 
 def _ensure_lane_embeds(embed_memory: Optional[EmbeddingMemory]) -> None:
-    """내부 보조 로직을 수행한다."""
     global _LANE_EMB_MODEL_ID
     if embed_memory is None:
         return
@@ -290,7 +271,6 @@ def _ensure_lane_embeds(embed_memory: Optional[EmbeddingMemory]) -> None:
     _LANE_EMB_MODEL_ID = id(embed_memory)
 
 def _ranks_from_scores(scores: List[float]) -> List[int]:
-    """내부 보조 로직을 수행한다."""
     order = np.argsort(-np.array(scores))
     ranks = [0] * len(scores)
     for idx, pos in enumerate(order, start=1):
@@ -617,7 +597,6 @@ def _pick_action_state(
     sexual_ready: bool,
 ) -> str:
     # Candidate states (exclude SEXUAL unless ready)
-    """내부 보조 로직을 수행한다."""
     candidates = list(ACTION_STATES)
     if sexual_ready:
         candidates.append("SEXUAL")
@@ -722,7 +701,6 @@ def build_system_messages(system_lore: str) -> List[Dict[str, str]]:
 
 
 # HISTORY (raw user/assistant only)
-
 def extract_recent_history(messages: List[Dict[str, str]], max_turns: int = 8) -> str:
     """
     최근 실제 user/assistant 대화 이력(raw)을 그대로 전달
@@ -751,7 +729,6 @@ def extract_last_assistant_output(messages: List[Dict[str, str]]) -> str:
 
 
 # PROTAGONIST NAME PARSE
-
 def parse_protagonist_name(system_lore: str) -> str:
     """입력 텍스트에서 필요한 값을 파싱해 반환한다."""
     t = system_lore or ""
@@ -769,7 +746,6 @@ def parse_protagonist_name(system_lore: str) -> str:
 
 
 # PLAYER NAME PARSE
-
 def parse_player_name(system_lore: str) -> str:
     """입력 텍스트에서 필요한 값을 파싱해 반환한다."""
     t = system_lore or ""
@@ -799,12 +775,10 @@ def parse_player_name(system_lore: str) -> str:
 
 
 # RELATION / SEXUAL CONDITION PARSE
-
 RELATION_KEYWORDS = ["적대", "거리감", "친밀", "사랑"]
 RELATION_INTIMACY_MAP = {"적대": 0, "거리감": 1, "친밀": 2, "사랑": 3}
 
 def _extract_section7(text: str) -> str:
-    """내부 보조 로직을 수행한다."""
     if not text:
         return ""
     m = re.search(r"\n\s*7\.\s*가장\s*최근\s*상호작용.*?(?=\n\s*\d+\.\s|\Z)", text, flags=re.DOTALL)
@@ -973,9 +947,6 @@ def llm_dialogue_quality_fail_openai(
 
 # allow_sexual flag resolution (FSM Engine already has global flags)
 
-
-# MODEL GENERATION
-
 def _supports_sampling_controls(model_name: str) -> bool:
     """gpt-5 family only supports default sampling behavior."""
     return not (model_name or "").strip().lower().startswith("gpt-5")
@@ -983,7 +954,6 @@ def _supports_sampling_controls(model_name: str) -> bool:
 
 def _extract_response_text(res: Any) -> str:
     # Preferred path in Responses API.
-    """내부 보조 로직을 수행한다."""
     txt = getattr(res, "output_text", None)
     if isinstance(txt, str) and txt.strip():
         return txt.strip()
@@ -1050,7 +1020,6 @@ def generate_text(
     repetition_penalty: float = 1.08,
     do_sample: bool = True
 ) -> str:
-    # NOTE: repetition_penalty/do_sample are ignored for OpenAI API.
     """모델 호출을 통해 결과 텍스트를 생성한다."""
     kwargs = {
         "model": model_name,
@@ -1115,16 +1084,6 @@ def generate_json(
     return None
 
 
-# PROMPTS (Role-separated, placeholder hardened)
-
-# [형식 예시]
-# {player_name}가 {protagonist}를 바라보며 말한다.
-# "{protagonist}, 지금 이야기해도 괜찮아?"
-
-
-# VALIDATORS (format guards only)
-
-
 # Sexual request detection (minimal, only for mode switching)
 
 def detect_sexual_request(user_text: str) -> bool:
@@ -1135,7 +1094,6 @@ def detect_sexual_request(user_text: str) -> bool:
 
 
 # Parsing integrated assistant output
-
 def split_integrated_assistant(text: str) -> Tuple[str, str, str]:
     """
     통합 출력(2줄)을 (narr, dia, merged)로 분해
@@ -1159,7 +1117,6 @@ def split_integrated_assistant(text: str) -> Tuple[str, str, str]:
 
 
 # LangGraph State
-
 NodeName = Literal[
     "INIT",
     "GEN_USER",
@@ -1226,7 +1183,6 @@ class VNState(TypedDict):
 
 
 # Graph builder (closure-injected runtime deps)
-
 def build_graph(
     client: OpenAI,
     model_name: str,
@@ -1469,7 +1425,7 @@ def build_graph(
             log_step("GEN_USER", "empty")
             return state
         
-         # ---------- 대사 추출 ----------
+         # 대사 추출
         q = extract_single_quote(raw)
 
         # 침묵 / 의미 없는 출력 → retry 증가 없이 재시도
@@ -2773,7 +2729,6 @@ def build_graph(
         return state
 
     # Routers
-
     def after_init(_: VNState) -> str:
         """INIT 이후 다음 노드를 선택한다."""
         return "GEN_USER"
@@ -2960,7 +2915,6 @@ def build_graph(
 
 
 # Scenario runner
-
 def run_scenario(
     system_lore: str,
     client: OpenAI,
@@ -3083,7 +3037,6 @@ def run_scenario(
 
 
 # CLI
-
 def main():
     """CLI 엔트리포인트.
 

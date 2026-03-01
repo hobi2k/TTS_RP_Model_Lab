@@ -1,4 +1,3 @@
-# infer_translate_lora.py
 """
 번역 LoRA 추론 스크립트 (KO -> JA)
 
@@ -83,18 +82,14 @@ def main() -> None:
 
     torch.manual_seed(args.seed)
 
-    # -----------------------
     # Tokenizer
-    # -----------------------
     tokenizer = AutoTokenizer.from_pretrained(base_dir, use_fast=True)
 
     # Qwen Base에서 pad_token 없는 경우가 많으므로 eos로 맞춘다.
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    # -----------------------
     # Base + LoRA 로드
-    # -----------------------
     # dtype은 GPU 지원에 맞춰 자동으로 가되, bf16 가능하면 bf16이 유리
     model = AutoModelForCausalLM.from_pretrained(
         base_dir,
@@ -105,9 +100,7 @@ def main() -> None:
     model = PeftModel.from_pretrained(model, lora_dir)
     model.eval()
 
-    # -----------------------
     # 프롬프트 구성
-    # -----------------------
     prompt = build_prompt(args.instruction, args.text)
 
     inputs = tokenizer(
@@ -121,9 +114,7 @@ def main() -> None:
     first_param = next(model.parameters())
     inputs = {k: v.to(first_param.device) for k, v in inputs.items()}
 
-    # -----------------------
     # Generate
-    # -----------------------
     gen_kwargs = dict(
         max_new_tokens=args.max_new_tokens,
         do_sample=args.do_sample,
