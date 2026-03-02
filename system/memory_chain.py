@@ -1,10 +1,15 @@
 """SQLite 기반 메모리 체인.
 
-기능:
-- 대화 턴 저장(chat_turns)
-- LLM 기반 장기기억 후보 추출(memory_candidates)
-- 점수 기반 승격(memory_slots)
-- 현재 user 발화와 연관된 슬롯 retrieval 후 system 메시지 주입
+이 모듈은 "기억 저장 + 후보 추출 + 승격 + 검색"을 하나의 흐름으로 묶는다.
+핵심은 다음과 같다.
+
+1) 채팅 턴 원본을 `chat_turns`에 저장한다.
+2) LLM으로 장기기억 후보를 추출해 `memory_candidates`에 기록한다.
+3) 점수화 후 승격된 항목만 `memory_slots`로 관리한다.
+4) 현재 유저 발화 기반으로 슬롯을 검색해 system 메시지로 주입한다.
+
+벡터 검색이 가능하면 sqlite-vec을 사용하고,
+불가능하면 lexical(토큰 겹침) 방식으로 안전하게 폴백한다.
 """
 
 from __future__ import annotations
@@ -36,10 +41,29 @@ from system.llm_engine import GenerationConfig, QwenEngine
 
 
 def _utc_now() -> str:
+    """_utc_now.
+    UTC 기준 현재 시간을 ISO-8601 문자열로 반환한다.
+
+    args:
+    - 없음
+
+    returns:
+    - str: UTC ISO-8601 타임스탬프
+    """
     return datetime.now(timezone.utc).isoformat()
 
 
 def _safe_float(v: Any, default: float = 0.0) -> float:
+    """_safe_float.
+    값을 float으로 안전하게 변환하고 실패 시 기본값을 반환한다.
+
+    args:
+    - v (Any): 변환 대상
+    - default (float): 변환 실패 시 반환할 기본값
+
+    returns:
+    - float: 변환 결과 또는 기본값
+    """
     try:
         return float(v)
     except Exception:
@@ -47,6 +71,15 @@ def _safe_float(v: Any, default: float = 0.0) -> float:
 
 
 def _tokenize_ko_en(text: str) -> set[str]:
+    """_tokenize_ko_en.
+    간이 토큰화로 한/영/숫자 2글자 이상 단어를 추출한다.
+
+    args:
+    - text (str): 입력 텍스트
+
+    returns:
+    - set[str]: 토큰 집합
+    """
     if not text:
         return set()
     return set(re.findall(r"[가-힣A-Za-z0-9_]{2,}", text.lower()))
@@ -54,7 +87,24 @@ def _tokenize_ko_en(text: str) -> set[str]:
 
 @dataclass
 class SummaryMemoryConfig:
-    """메모리 체인 설정."""
+    """SummaryMemoryConfig.
+    메모리 체인 동작 파라미터를 담는 설정 데이터 클래스다.
+
+    args:
+    - enabled (bool): 전체 기능 on/off
+    - update_every_turns (int): N턴마다 후보 추출/승격
+    - max_summary_chars (int): system 메시지 길이 상한
+    - db_path (str | None): SQLite 파일 경로
+    - session_id (str): 세션 분리 키
+    - recent_turn_window (int): 최근 N턴 요약 범위
+    - retrieval_limit (int): 검색 결과 최대 개수
+    - promote_threshold (float): 승격 임계값
+    - vector_enabled (bool): 벡터 검색 사용 여부
+    - vector_dim (int): HashingVectorizer 차원
+
+    returns:
+    - SummaryMemoryConfig: 설정 객체
+    """
 
     enabled: bool = True
     update_every_turns: int = 1
@@ -69,7 +119,16 @@ class SummaryMemoryConfig:
 
 
 class SummaryMemoryChain:
-    """장기기억 후보 추출 + 점수 승격 + retrieval."""
+    """SummaryMemoryChain.
+    장기기억 후보 추출/승격/검색을 수행하는 메모리 체인이다.
+
+    args:
+    - llm_engine (QwenEngine): 후보 추출용 LLM 엔진
+    - config (SummaryMemoryConfig | None): 설정 (None이면 기본값)
+
+    returns:
+    - SummaryMemoryChain: 메모리 체인 인스턴스
+    """
 
     def __init__(self, llm_engine: QwenEngine, config: SummaryMemoryConfig | None = None) -> None:
         self.llm_engine = llm_engine
@@ -77,17 +136,19 @@ class SummaryMemoryChain:
         self.summary_text: str = ""
         self.turn_count: int = 0
 
+        # 기본 DB 경로는 프로젝트 루트/outputs/memory/memory.sqlite3
         project_root = Path(__file__).resolve().parents[1]
         db_default = project_root / "outputs" / "memory" / "memory.sqlite3"
         self.db_path = Path(self.config.db_path) if self.config.db_path else db_default
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        # Gradio/FastAPI worker thread 간에 동일 RuntimeServices 인스턴스를 공유하므로
+        # Gradio/FastAPI worker thread 간 동일 RuntimeServices 인스턴스를 공유하므로
         # SQLite 연결은 thread check를 비활성화해 재사용 가능하게 둔다.
         # 실제 동시 접근은 상위(RuntimeServices._turn_lock)에서 직렬화한다.
         self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self._init_db()
         self.vector_dim = int(self.config.vector_dim)
+        # sqlite-vec 로드 가능 여부 확인 (권한/확장 문제 대비)
         self._sqlite_vec_loaded = False
         if sqlite_vec is not None:
             try:
@@ -97,6 +158,7 @@ class SummaryMemoryChain:
                 self._sqlite_vec_loaded = True
             except Exception:
                 self._sqlite_vec_loaded = False
+        # 벡터 검색 사용 조건: 설정 + numpy + vectorizer + sqlite-vec
         self.vector_enabled = bool(
             self.config.vector_enabled
             and np is not None
@@ -104,6 +166,7 @@ class SummaryMemoryChain:
             and self._sqlite_vec_loaded
         )
         self._vectorizer = None
+        # 벡터 검색이 가능하면 해시 임베딩 + vec 테이블 준비
         if self.vector_enabled:
             self._vectorizer = HashingVectorizer(
                 n_features=self.vector_dim,
@@ -117,6 +180,7 @@ class SummaryMemoryChain:
             f"sqlite_vec_loaded={self._sqlite_vec_loaded} dim={self.vector_dim}"
         )
 
+        # 후보 추출용 LLM 설정 (안정/결정적 출력 지향)
         self.extract_gen = GenerationConfig(
             max_new_tokens=420,
             temperature=0.2,
@@ -129,6 +193,15 @@ class SummaryMemoryChain:
         )
 
     def _init_db(self) -> None:
+        """_init_db.
+        SQLite 스키마를 초기화하고 필요한 인덱스를 생성한다.
+
+        args:
+        - 없음
+
+        returns:
+        - None
+        """
         cur = self.conn.cursor()
         cur.execute("PRAGMA journal_mode=WAL")
         cur.execute(
@@ -193,6 +266,15 @@ class SummaryMemoryChain:
         self.conn.commit()
 
     def _init_vec_table(self) -> None:
+        """_init_vec_table.
+        sqlite-vec 가상 테이블을 생성한다.
+
+        args:
+        - 없음
+
+        returns:
+        - None
+        """
         self.conn.execute(
             f"""
             CREATE VIRTUAL TABLE IF NOT EXISTS memory_slot_vec
@@ -202,6 +284,15 @@ class SummaryMemoryChain:
         self.conn.commit()
 
     def _embed_text(self, text: str) -> bytes | None:
+        """_embed_text.
+        텍스트를 해시 임베딩 후 L2 정규화하고 sqlite-vec 바이너리로 직렬화한다.
+
+        args:
+        - text (str): 입력 텍스트
+
+        returns:
+        - bytes | None: 직렬화된 벡터 또는 실패 시 None
+        """
         if not self.vector_enabled or self._vectorizer is None or np is None:
             return None
         try:
@@ -219,6 +310,16 @@ class SummaryMemoryChain:
         return None
 
     def _upsert_slot_vector(self, slot_id: int, text: str) -> None:
+        """_upsert_slot_vector.
+        memory_slots.id에 대응하는 벡터를 갱신한다.
+
+        args:
+        - slot_id (int): memory_slots의 id
+        - text (str): 임베딩 대상 텍스트
+
+        returns:
+        - None
+        """
         blob = self._embed_text(text)
         if blob is None:
             return
@@ -233,6 +334,15 @@ class SummaryMemoryChain:
         )
 
     def _next_turn_idx(self) -> int:
+        """_next_turn_idx.
+        현재 세션의 다음 turn_idx를 계산한다.
+
+        args:
+        - 없음
+
+        returns:
+        - int: 다음 turn_idx
+        """
         row = self.conn.execute(
             "SELECT COALESCE(MAX(turn_idx), 0) AS max_turn FROM chat_turns WHERE session_id = ?",
             (self.config.session_id,),
@@ -240,6 +350,17 @@ class SummaryMemoryChain:
         return int(row["max_turn"]) + 1
 
     def _insert_turn_pair(self, turn_idx: int, user_text: str, assistant_text: str) -> None:
+        """_insert_turn_pair.
+        user/assistant 한 쌍 턴을 DB에 기록한다.
+
+        args:
+        - turn_idx (int): 턴 인덱스
+        - user_text (str): 사용자 발화
+        - assistant_text (str): 어시스턴트 응답
+
+        returns:
+        - None
+        """
         now = _utc_now()
         self.conn.executemany(
             """
@@ -254,33 +375,43 @@ class SummaryMemoryChain:
         self.conn.commit()
 
     def _extract_candidates(self, user_text: str, assistant_text: str) -> list[dict[str, Any]]:
+        """_extract_candidates.
+        LLM으로 장기기억 후보를 JSON으로 추출한다.
+
+        args:
+        - user_text (str): 사용자 발화
+        - assistant_text (str): 어시스턴트 응답
+
+        returns:
+        - list[dict[str, Any]]: 후보 리스트
+        """
         prompt = f"""너는 대화 장기기억 추출기다.
-이번 user/assistant 교환에서 장기 보존 가치가 있는 항목만 JSON으로 추출하라.
-출력 스키마:
-{{
-  "candidates": [
-    {{
-      "type": "preference|fact|promise|relationship|emotion|plan|boundary",
-      "subject": "user|assistant|pair",
-      "key": "짧은_식별자",
-      "value": "핵심 내용",
-      "confidence": 0.0,
-      "future_impact": 0.0,
-      "emotion_intensity": 0.0
-    }}
-  ]
-}}
-규칙:
-- 당장 다음 대화나 장기 관계에 영향이 없는 잡담은 제외.
-- confidence/future_impact/emotion_intensity는 0~1 실수.
-- JSON 객체만 출력.
+        이번 user/assistant 교환에서 장기 보존 가치가 있는 항목만 JSON으로 추출하라.
+        출력 스키마:
+        {{
+        "candidates": [
+            {{
+            "type": "preference|fact|promise|relationship|emotion|plan|boundary",
+            "subject": "user|assistant|pair",
+            "key": "짧은_식별자",
+            "value": "핵심 내용",
+            "confidence": 0.0,
+            "future_impact": 0.0,
+            "emotion_intensity": 0.0
+            }}
+        ]
+        }}
+        규칙:
+        - 당장 다음 대화나 장기 관계에 영향이 없는 잡담은 제외.
+        - confidence/future_impact/emotion_intensity는 0~1 실수.
+        - JSON 객체만 출력.
 
-[user]
-{user_text.strip()}
+        [user]
+        {user_text.strip()}
 
-[assistant]
-{assistant_text.strip()}
-"""
+        [assistant]
+        {assistant_text.strip()}
+        """
         msgs = [
             {"role": "system", "content": "출력은 JSON 객체 하나만."},
             {"role": "user", "content": prompt},
@@ -324,6 +455,15 @@ class SummaryMemoryChain:
         return cleaned
 
     def _type_importance(self, memory_type: str) -> float:
+        """_type_importance.
+        메모리 타입별 중요도 가중치를 반환한다.
+
+        args:
+        - memory_type (str): 메모리 타입
+
+        returns:
+        - float: 가중치
+        """
         mapping = {
             "promise": 1.0,
             "boundary": 0.95,
@@ -336,6 +476,15 @@ class SummaryMemoryChain:
         return mapping.get(memory_type, 0.5)
 
     def _compute_recurrence(self, key: str) -> float:
+        """_compute_recurrence.
+        동일 key의 반복 출현 정도로 재발성 점수를 계산한다.
+
+        args:
+        - key (str): 후보 key
+
+        returns:
+        - float: 재발성 점수 (0~1)
+        """
         row = self.conn.execute(
             """
             SELECT COUNT(*) AS cnt
@@ -348,6 +497,16 @@ class SummaryMemoryChain:
         return min(1.0, cnt / 3.0)
 
     def _compute_novelty(self, key: str, value: str) -> float:
+        """_compute_novelty.
+        기존 슬롯과 비교해 새로움 점수를 계산한다.
+
+        args:
+        - key (str): 후보 key
+        - value (str): 후보 value
+
+        returns:
+        - float: 새로움 점수 (0~1)
+        """
         row = self.conn.execute(
             """
             SELECT value
@@ -372,6 +531,20 @@ class SummaryMemoryChain:
         recurrence: float,
         novelty: float,
     ) -> float:
+        """_score_candidate.
+        후보 항목의 최종 점수를 합성한다.
+
+        args:
+        - memory_type (str): 메모리 타입
+        - confidence (float): 신뢰도
+        - future_impact (float): 미래 영향도
+        - emotion_intensity (float): 감정 강도
+        - recurrence (float): 재발성
+        - novelty (float): 새로움
+
+        returns:
+        - float: 합성 점수 (0~1)
+        """
         importance = self._type_importance(memory_type)
         score = (
             0.30 * importance
@@ -390,6 +563,18 @@ class SummaryMemoryChain:
         assistant_text: str,
         c: dict[str, Any],
     ) -> None:
+        """_store_candidate_and_promote.
+        후보를 저장하고 임계값 이상이면 슬롯으로 승격한다.
+
+        args:
+        - turn_idx (int): 턴 인덱스
+        - user_text (str): 사용자 발화
+        - assistant_text (str): 어시스턴트 응답
+        - c (dict[str, Any]): 후보 항목
+
+        returns:
+        - None
+        """
         recurrence = self._compute_recurrence(c["key"])
         novelty = self._compute_novelty(c["key"], c["value"])
         score = self._score_candidate(
@@ -469,6 +654,15 @@ class SummaryMemoryChain:
         self.conn.commit()
 
     def _recent_turn_digest(self) -> str:
+        """_recent_turn_digest.
+        최근 N턴 요약 스냅샷을 만든다 (프롬프트 주입용).
+
+        args:
+        - 없음
+
+        returns:
+        - str: 요약 스냅샷 문자열
+        """
         n = max(1, self.config.recent_turn_window)
         rows = self.conn.execute(
             """
@@ -489,6 +683,19 @@ class SummaryMemoryChain:
         return "\n".join(lines)
 
     def _retrieve_slots(self, current_user_text: str | None) -> list[sqlite3.Row]:
+        """_retrieve_slots.
+        장기기억 슬롯을 검색한다.
+
+        우선순위:
+        1) sqlite-vec 유사도 검색
+        2) lexical(토큰 겹침) 검색
+
+        args:
+        - current_user_text (str | None): 현재 유저 발화
+
+        returns:
+        - list[sqlite3.Row]: 검색된 슬롯 목록
+        """
         # 1) Vector retrieval path
         if self.vector_enabled and current_user_text and current_user_text.strip():
             q_blob = self._embed_text(current_user_text)
@@ -555,7 +762,15 @@ class SummaryMemoryChain:
         return [r for _, r in ranked[: max(1, self.config.retrieval_limit)]]
 
     def build_memory_system_message(self, current_user_text: str | None = None) -> dict | None:
-        """검색된 장기기억 + 최근 턴 요약을 system 메시지로 반환."""
+        """build_memory_system_message.
+        검색된 장기기억과 최근 턴 요약을 system 메시지로 구성한다.
+
+        args:
+        - current_user_text (str | None): 현재 유저 발화
+
+        returns:
+        - dict | None: system 메시지 또는 None
+        """
         if not self.config.enabled:
             return None
         slots = self._retrieve_slots(current_user_text)
@@ -588,7 +803,16 @@ class SummaryMemoryChain:
         return {"role": "system", "content": content}
 
     def update(self, user_text: str, assistant_text: str) -> None:
-        """새 턴 저장 + 후보 추출 + 점수 승격."""
+        """update.
+        새 턴 저장 후 후보를 추출하고 점수화해 승격한다.
+
+        args:
+        - user_text (str): 사용자 발화
+        - assistant_text (str): 어시스턴트 응답
+
+        returns:
+        - None
+        """
         if not self.config.enabled:
             return
         self.turn_count += 1
