@@ -3,7 +3,6 @@ from __future__ import annotations
 """Qwen RP용 GRPO 학습 스크립트.
 
 설계 목표:
-- 코드 가독성 우선
 - 보상 함수 단순화
 - 디버깅 용이성 확보
 

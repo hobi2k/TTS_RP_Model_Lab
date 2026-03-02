@@ -1,11 +1,10 @@
 # RTX 5080 / WSL2 Style-BERT-VITS2 설치 및 운영 재현 가이드
 
-이 문서는 현재 `pytorch-demo/saya_char_qwen2.5/models/Style-BERT-VITS2`를 WSL2 + NVIDIA GPU 환경에서 다시 설치하고, `app.py`, `server_editor.py`, `transcribe.py`를 실행할 때 필요한 실제 수정 사항과 운영 절차를 재현 가능하게 정리한 문서다.
+이 문서는 현재 `saya_char_qwen2.5/models/Style-BERT-VITS2`를 WSL2 + NVIDIA GPU 환경에서 다시 설치하고, `app.py`, `server_editor.py`, `transcribe.py`를 실행할 때 필요한 실제 수정 사항과 운영 절차를 재현 가능하게 정리한 문서다.
 
 기준 경로:
 
-- 프로젝트 루트: `/home/ahnhs2k/pytorch-demo`
-- 대상 프로젝트: `/home/ahnhs2k/pytorch-demo/saya_char_qwen2.5/models/Style-BERT-VITS2`
+- 대상 프로젝트: `/saya_char_qwen2.5/models/Style-BERT-VITS2`
 
 이 문서는 다음 문제들을 실제로 겪은 뒤 정리한 것이다.
 
@@ -150,7 +149,7 @@ dependencies = [
 `Style-BERT-VITS2` 디렉터리로 이동한다.
 
 ```bash
-cd ~/pytorch-demo/saya_char_qwen2.5/models/Style-BERT-VITS2
+cd models/Style-BERT-VITS2
 ```
 
 가상환경이 없다면 먼저 만든다.
@@ -309,7 +308,7 @@ uv run --active --no-sync server_editor.py --inbrowser
 권장 순서:
 
 ```bash
-cd ~/pytorch-demo/saya_char_qwen2.5/models/Style-BERT-VITS2
+cd models/Style-BERT-VITS2
 source venv/bin/activate
 uv lock
 uv sync --active --inexact
@@ -320,7 +319,7 @@ python server_editor.py --inbrowser
 또는:
 
 ```bash
-cd ~/pytorch-demo/saya_char_qwen2.5/models/Style-BERT-VITS2
+cd models/Style-BERT-VITS2
 source venv/bin/activate
 uv run --active --no-sync server_editor.py --inbrowser
 ```
@@ -443,7 +442,7 @@ Because there is no version of triton==3.6.0+git... and all versions of torch de
 예시 전체:
 
 ```bash
-cd ~/pytorch-demo/saya_char_qwen2.5/models/Style-BERT-VITS2
+cd models/Style-BERT-VITS2
 
 python3.10 -m venv venv
 source venv/bin/activate

@@ -144,10 +144,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from trl import SFTTrainer, SFTConfig
 
 
-# =========================================================
 # LoRA 설정
-# =========================================================
-
 def build_lora_config(r: int, alpha: int, dropout: float) -> LoraConfig:
     return LoraConfig(
         r=r,
@@ -162,10 +159,7 @@ def build_lora_config(r: int, alpha: int, dropout: float) -> LoraConfig:
     )
 
 
-# =========================================================
 # Chat template
-# =========================================================
-
 def _normalize_role(role: Any) -> Optional[str]:
     if not isinstance(role, str):
         return None
@@ -293,10 +287,7 @@ def debug_print_label_mask(trainer: SFTTrainer, tokenizer, max_rows: int = 220) 
     print("[DEBUG_LABEL_MASK] ==================================\n", flush=True)
 
 
-# =========================================================
 # Main
-# =========================================================
-
 def main():
     parser = argparse.ArgumentParser()
 

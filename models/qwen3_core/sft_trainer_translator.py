@@ -58,7 +58,6 @@ DEFAULT_OUTPUT_DIR = MODEL_ASSETS_DIR / "qwen3_1.7_ko2ja_lora"
 
 
 # 프롬프트 구성
-
 def build_prompt(instruction: str, user_input: str) -> str:
     """
     번역 SFT용 프롬프트를 구성한다.
@@ -94,7 +93,6 @@ def build_full_text(example: Dict[str, str], eos_token: str) -> str:
 
 
 # Tokenize
-
 def tokenize_function(
     examples: Dict[str, List[str]],
     tokenizer: AutoTokenizer,
@@ -145,7 +143,6 @@ def tokenize_function(
 
 
 # LoRA 설정
-
 def build_lora_config(r: int, alpha: int, dropout: float) -> LoraConfig:
     """
     Qwen 계열 번역 SFT에 적합한 LoRA 설정
@@ -200,11 +197,10 @@ class DataCollatorForCausalLM:
         return batch
 
 # Main
-
 def main() -> None:
     parser = argparse.ArgumentParser()
 
-    # ----- 경로 -----
+    # 경로
     parser.add_argument(
         "--model_name",
         type=str,
@@ -222,7 +218,7 @@ def main() -> None:
         default=str(DEFAULT_OUTPUT_DIR),
     )
 
-    # ----- 학습 파라미터 -----
+    # 학습 파라미터
     parser.add_argument("--max_length", type=int, default=512)
     parser.add_argument("--num_train_epochs", type=float, default=5.0)
     parser.add_argument("--per_device_train_batch_size", type=int, default=8)
@@ -234,12 +230,12 @@ def main() -> None:
     parser.add_argument("--save_steps", type=int, default=500)
     parser.add_argument("--save_total_limit", type=int, default=2)
 
-    # ----- LoRA -----
+    # LoRA
     parser.add_argument("--lora_r", type=int, default=32)
     parser.add_argument("--lora_alpha", type=int, default=64)
     parser.add_argument("--lora_dropout", type=float, default=0.05)
 
-    # ----- 기타 -----
+    # 기타
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--bf16", action="store_true")
     parser.add_argument("--fp16", action="store_true")
@@ -253,7 +249,6 @@ def main() -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Tokenizer / Model 로드 (로컬)
-
     tokenizer = AutoTokenizer.from_pretrained(args.model_name, use_fast=True)
 
     if tokenizer.pad_token is None:
@@ -270,7 +265,6 @@ def main() -> None:
         model.config.use_cache = False
 
     # LoRA 적용
-
     lora_config = build_lora_config(
         r=args.lora_r,
         alpha=args.lora_alpha,
@@ -280,7 +274,6 @@ def main() -> None:
     model.print_trainable_parameters()
 
     # Dataset 로드
-
     raw = load_dataset("json", data_files=str(data_path))
     dataset = raw["train"]
 
@@ -311,8 +304,6 @@ def main() -> None:
         )
 
     # Trainer
-
-
     data_collator = DataCollatorForCausalLM(tokenizer=tokenizer)
 
     training_args = TrainingArguments(
@@ -347,7 +338,6 @@ def main() -> None:
     trainer.train()
 
     # 저장 (LoRA만)
-
     trainer.model.save_pretrained(output_dir / "lora_adapter")
     tokenizer.save_pretrained(output_dir / "tokenizer")
 

@@ -33,7 +33,7 @@ MODELS = {
     # "qwen3-1.7b-base": "Qwen/Qwen3-1.7B-Base",
     # "qwen3-4b-instruct": "Qwen/Qwen3-4B-Instruct-2507",
     "qwen3-8b": "Qwen/Qwen3-8B",
-    "YanoljaNEXT-EEVE-7B-v2": "yanolja/YanoljaNEXT-EEVE-Instruct-7B-v2-Preview",
+    # "YanoljaNEXT-EEVE-7B-v2": "yanolja/YanoljaNEXT-EEVE-Instruct-7B-v2-Preview",
 }
 
 

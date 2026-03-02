@@ -4,7 +4,6 @@
 
 ## 1. 파일명 관련
 
-- 요청 파일명은 `trpo_trainer.md`였지만, 실제 구현 스크립트는 `grpo_trainer.py`다.
 - 알고리즘은 TRPO가 아니라 GRPO를 사용한다.
 
 ## 2. 학습 입력 형식
