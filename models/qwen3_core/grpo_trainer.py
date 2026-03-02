@@ -44,9 +44,6 @@ uv run models/qwen3_core/grpo_trainer.py \
   --bnb_4bit_quant_type nf4 \
   --bnb_4bit_use_double_quant \
   --bnb_4bit_compute_dtype bfloat16 \
-  --reward_embedding_model data/embedding/BGE-m3-ko \
-  --reward_embedding_batch_size 16 \
-  --reward_embedding_max_length 256 \
   --debug_log_completions \
   --debug_log_every_calls 5 \
   --debug_log_num_samples 2
@@ -76,9 +73,6 @@ uv run models/qwen3_core/grpo_trainer.py \
   --bnb_4bit_quant_type nf4 \
   --bnb_4bit_use_double_quant \
   --bnb_4bit_compute_dtype bfloat16 \
-  --reward_embedding_model data/embedding/BGE-m3-ko \
-  --reward_embedding_batch_size 16 \
-  --reward_embedding_max_length 256 \
   --debug_log_completions \
   --debug_log_every_calls 5 \
   --debug_log_num_samples 2
@@ -92,7 +86,7 @@ uv run models/qwen3_core/grpo_trainer.py \
   --per_device_train_batch_size 1 \
   --per_device_eval_batch_size 2 \
   --gradient_accumulation_steps 16 \
-  --num_train_epochs 2 \
+  --num_train_epochs 3 \
   --learning_rate 2e-6 \
   --max_prompt_length 768 \
   --max_completion_length 200 \
@@ -113,18 +107,12 @@ from typing import Any, Dict, List, Optional, Tuple
 import torch
 from datasets import Dataset, load_dataset
 from peft import LoraConfig, prepare_model_for_kbit_training
-from transformers import AutoModel, AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from trl import GRPOConfig, GRPOTrainer
 
 
 PLAYER_NAMES = ("하야토", "카즈키", "소마")
 ROLE_MARKERS = ("SYSTEM:", "USER:", "ASSISTANT:", "role:", "<|im_start|", "<|assistant|")
-
-_EMBED_TOKENIZER: Any = None
-_EMBED_MODEL: Any = None
-_EMBED_DEVICE: str = "cpu"
-_EMBED_BATCH_SIZE: int = 16
-_EMBED_MAX_LENGTH: int = 256
 
 _DEBUG_LOG_COMPLETIONS: bool = False
 _DEBUG_LOG_EVERY_CALLS: int = 20
@@ -298,73 +286,6 @@ def _rough_token_len(text: str) -> int:
     return len(pieces)
 
 
-def _init_reward_embedder(model_name: str, device: str, batch_size: int, max_length: int) -> None:
-    """임베딩 보상 인코더를 초기화한다."""
-    global _EMBED_TOKENIZER, _EMBED_MODEL, _EMBED_DEVICE, _EMBED_BATCH_SIZE, _EMBED_MAX_LENGTH
-    _EMBED_TOKENIZER = AutoTokenizer.from_pretrained(model_name, use_fast=True)
-    _EMBED_MODEL = AutoModel.from_pretrained(model_name)
-    _EMBED_MODEL.eval()
-    _EMBED_MODEL.to(device)
-    _EMBED_DEVICE = device
-    _EMBED_BATCH_SIZE = max(1, int(batch_size))
-    _EMBED_MAX_LENGTH = max(32, int(max_length))
-
-
-def _mean_pool(last_hidden_state: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
-    """attention mask를 적용한 mean pooling을 계산한다."""
-    mask = attention_mask.unsqueeze(-1).to(last_hidden_state.dtype)
-    summed = (last_hidden_state * mask).sum(dim=1)
-    denom = mask.sum(dim=1).clamp(min=1e-6)
-    return summed / denom
-
-
-def _embed_texts(texts: List[str]) -> Optional[torch.Tensor]:
-    """텍스트 리스트를 L2 정규화 임베딩 텐서로 변환한다."""
-    if _EMBED_TOKENIZER is None or _EMBED_MODEL is None:
-        return None
-    if not texts:
-        return None
-
-    vectors: List[torch.Tensor] = []
-    with torch.no_grad():
-        for i in range(0, len(texts), _EMBED_BATCH_SIZE):
-            chunk = texts[i : i + _EMBED_BATCH_SIZE]
-            encoded = _EMBED_TOKENIZER(
-                chunk,
-                padding=True,
-                truncation=True,
-                max_length=_EMBED_MAX_LENGTH,
-                return_tensors="pt",
-            )
-            encoded = {k: v.to(_EMBED_DEVICE) for k, v in encoded.items()}
-            out = _EMBED_MODEL(**encoded)
-            pooled = _mean_pool(out.last_hidden_state, encoded["attention_mask"])
-            pooled = torch.nn.functional.normalize(pooled, p=2, dim=1)
-            vectors.append(pooled.cpu())
-
-    return torch.cat(vectors, dim=0)
-
-
-def _embedding_similarity_pairs(pairs: List[Tuple[str, str]]) -> List[float]:
-    """문자열 쌍 리스트의 임베딩 유사도를 배치로 계산한다."""
-    if not pairs:
-        return []
-    for a, b in pairs:
-        if not a or not b:
-            raise RuntimeError("Embedding similarity pairs must not contain empty strings.")
-
-    left = [a for a, _ in pairs]
-    right = [b for _, b in pairs]
-    vecs = _embed_texts(left + right)
-    if vecs is None:
-        raise RuntimeError("Reward embedder is not initialized.")
-
-    n = len(pairs)
-    left_vecs = vecs[:n]
-    right_vecs = vecs[n:]
-    cos = torch.clamp((left_vecs * right_vecs).sum(dim=1), min=-1.0, max=1.0)
-    sims = (cos + 1.0) / 2.0
-    return [float(v.item()) for v in sims]
 
 
 def _debug_log_completion_samples(completions: List[Any]) -> None:
@@ -476,53 +397,6 @@ def reward_length(prompts: List[Any], completions: List[Any], **kwargs: Any) -> 
     return scores
 
 
-def reward_grounded_to_user(prompts: List[Any], completions: List[Any], **kwargs: Any) -> List[float]:
-    """직전 user 발화와의 의미 정합성을 계산하고 과복창을 약감점한다."""
-    scores: List[float] = [0.0 for _ in completions]
-    valid_meta: List[Tuple[int, str, str, bool]] = []
-
-    for idx, (prompt, comp) in enumerate(zip(prompts, completions)):
-        prompt_txt = _prompt_to_role_text(prompt)
-        user_txt = _extract_last_user_from_prompt(prompt_txt)
-        raw = _as_text(comp)
-        narration, quote, valid = _normalize_completion_for_scoring(raw)
-        if not user_txt or not valid:
-            continue
-        out_txt = f"{narration} {quote}"
-        valid_meta.append((idx, user_txt, out_txt, "?" in user_txt))
-
-    if not valid_meta:
-        return scores
-
-    sims = _embedding_similarity_pairs([(u, o) for _, u, o, _ in valid_meta])
-
-    for (idx, user_txt, out_txt, is_question), sim in zip(valid_meta, sims):
-        if is_question and sim < 0.10:
-            scores[idx] = 0.0
-            continue
-
-        if sim >= 0.50:
-            score = 1.0
-        elif sim >= 0.35:
-            score = 0.75
-        elif sim >= 0.20:
-            score = 0.45
-        elif sim >= 0.10:
-            score = 0.20
-        else:
-            score = 0.05
-
-        overlap = _ngram_overlap_ratio(user_txt, out_txt, n=3)
-        if overlap > 0.70:
-            score -= 0.10
-        elif overlap > 0.55:
-            score -= 0.05
-
-        scores[idx] = max(0.0, score)
-
-    return scores
-
-
 def reward_character_consistency(prompts: List[Any], completions: List[Any], **kwargs: Any) -> List[float]:
     """주인공 이름/말투 일관성 점수를 계산한다."""
     scores: List[float] = []
@@ -554,53 +428,6 @@ def reward_character_consistency(prompts: List[Any], completions: List[Any], **k
             score -= 0.45
 
         scores.append(max(0.0, min(1.0, score)))
-
-    return scores
-
-
-def reward_reference_alignment(prompts: List[Any], completions: List[Any], **kwargs: Any) -> List[float]:
-    """reference와의 의미 정렬 점수를 계산한다."""
-    refs = kwargs.get("reference")
-    if refs is None:
-        refs = kwargs.get("references")
-
-    scores: List[float] = [0.5 for _ in completions]
-    valid_meta: List[Tuple[int, str, str]] = []
-
-    for idx, comp in enumerate(completions):
-        raw = _as_text(comp)
-        narration, quote, valid = _normalize_completion_for_scoring(raw)
-        if not valid:
-            scores[idx] = 0.0
-            continue
-        out_txt = f"{narration} {quote}"
-
-        ref_txt = ""
-        if isinstance(refs, list) and idx < len(refs):
-            ref_txt = _as_text(refs[idx]).strip()
-        elif isinstance(refs, str):
-            ref_txt = refs.strip()
-
-        if not ref_txt:
-            continue
-        valid_meta.append((idx, out_txt, ref_txt))
-
-    if not valid_meta:
-        return scores
-
-    sims = _embedding_similarity_pairs([(o, r) for _, o, r in valid_meta])
-
-    for (idx, _, _), sim in zip(valid_meta, sims):
-        if sim >= 0.55:
-            scores[idx] = 1.0
-        elif sim >= 0.40:
-            scores[idx] = 0.8
-        elif sim >= 0.25:
-            scores[idx] = 0.55
-        elif sim >= 0.12:
-            scores[idx] = 0.30
-        else:
-            scores[idx] = 0.10
 
     return scores
 
@@ -894,9 +721,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--top_k", type=int, default=30)
     parser.add_argument("--repetition_penalty", type=float, default=1.1)
 
-    parser.add_argument("--reward_embedding_model", type=str, default="data/embedding/BGE-m3-ko")
-    parser.add_argument("--reward_embedding_batch_size", type=int, default=16)
-    parser.add_argument("--reward_embedding_max_length", type=int, default=256)
 
     parser.add_argument("--debug_log_completions", action="store_true")
     parser.add_argument("--debug_log_every_calls", type=int, default=20)
@@ -973,9 +797,8 @@ def main() -> None:
         "report_to": "none",
         "seed": args.seed,
         # reward_funcs 순서:
-        # [format, role_split, grounded_to_user, character_consistency, reference_alignment, length]
-        # character_consistency 가중치를 올리고(reference보다 우선) reference_alignment는 낮춘다.
-        "reward_weights": [0.28, 0.22, 0.12, 0.18, 0.12, 0.08],
+        # [format, role_split, character_consistency, length]
+        "reward_weights": [0.34, 0.26, 0.26, 0.14],
     }
     supported = set(inspect.signature(GRPOConfig.__init__).parameters.keys())
     dropped = sorted(k for k in grpo_kwargs if k not in supported)
@@ -1027,20 +850,10 @@ def main() -> None:
         )
         return
 
-    embed_device = "cuda" if torch.cuda.is_available() else "cpu"
-    _init_reward_embedder(
-        model_name=args.reward_embedding_model,
-        device=embed_device,
-        batch_size=args.reward_embedding_batch_size,
-        max_length=args.reward_embedding_max_length,
-    )
-
     reward_funcs = [
         reward_format,
         reward_role_split,
-        reward_grounded_to_user,
         reward_character_consistency,
-        reward_reference_alignment,
         reward_length,
     ]
 

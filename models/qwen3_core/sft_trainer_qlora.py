@@ -48,17 +48,18 @@ uv run models/qwen3_core/sft_trainer_qlora.py \
   --metric_for_best_model eval_loss \
   --assistant_only_loss
 
+while kill -0 311637 2>/dev/null; do sleep 30; done
 uv run models/qwen3_core/sft_trainer_qlora.py \
-  --model_name models/qwen3_core/model_assets/YanoljaNEXT-EEVE-7B-v2 \
+  --model_name models/qwen3_core/model_assets/qwen3-8b \
   --data_path /mnt/d/rp_data/rewrite/singleturn_rewrite.jsonl \
-  --output_dir models/qwen3_core/model_assets/lasttry_stage1 \
+  --output_dir models/qwen3_core/model_assets/qwen3_8b_stage1 \
   --load_in_4bit \
   --bf16 \
   --gradient_checkpointing \
   --max_length 4096 \
   --per_device_train_batch_size 1 \
   --gradient_accumulation_steps 16 \
-  --num_train_epochs 8 \
+  --num_train_epochs 6 \
   --learning_rate 2e-5 \
   --warmup_ratio 0.05 \
   --save_steps 25 \
@@ -137,7 +138,7 @@ uv run models/qwen3_core/sft_trainer_qlora.py \
   --max_length 4096 \
   --per_device_train_batch_size 1 \
   --gradient_accumulation_steps 16 \
-  --num_train_epochs 3 \
+  --num_train_epochs 4 \
   --learning_rate 2e-5 \
   --warmup_ratio 0.05 \
   --save_steps 25 \
