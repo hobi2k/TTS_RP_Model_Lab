@@ -51,14 +51,14 @@ uv run models/qwen3_core/sft_trainer_qlora.py \
 uv run models/qwen3_core/sft_trainer_qlora.py \
   --model_name models/qwen3_core/model_assets/YanoljaNEXT-EEVE-7B-v2 \
   --data_path /mnt/d/rp_data/rewrite/singleturn_rewrite.jsonl \
-  --output_dir models/qwen3_core/model_assets/YanoljaNEXT-EEVE-7B-v2_lora_stage1 \
+  --output_dir models/qwen3_core/model_assets/lasttry_stage1 \
   --load_in_4bit \
   --bf16 \
   --gradient_checkpointing \
   --max_length 4096 \
   --per_device_train_batch_size 1 \
   --gradient_accumulation_steps 16 \
-  --num_train_epochs 6 \
+  --num_train_epochs 8 \
   --learning_rate 2e-5 \
   --warmup_ratio 0.05 \
   --save_steps 25 \

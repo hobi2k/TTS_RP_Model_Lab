@@ -109,7 +109,7 @@ class QwenEngine:
         }
         llm_kwargs["max_model_len"] = max_model_len
 
-        # 요청사항: vLLM + bitsandbytes를 기본으로 사용.
+        # vLLM + bitsandbytes를 기본으로 사용.
         # 비활성화하려면 VLLM_QUANTIZATION=none
         quant_mode = os.getenv("VLLM_QUANTIZATION", "bitsandbytes").strip().lower()
         if quant_mode in {"bnb", "bitsandbytes"}:
