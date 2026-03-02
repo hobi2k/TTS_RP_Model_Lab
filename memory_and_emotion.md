@@ -220,7 +220,7 @@ sqlite-vec을 쓰면,
 - `_normalize_emotion`으로 형식/우선순위 강제
 
 2. 2차: fallback
-- LLM 출력이 깨지면 키워드 규칙으로 최소 기능 유지
+- LLM 판정이 실패(파싱 실패/None 반환)할 때만 키워드 규칙으로 최소 기능 유지
 
 즉, 정확도는 LLM에 기대고, 가용성은 fallback으로 보장한다.
 
