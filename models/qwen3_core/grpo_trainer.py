@@ -77,26 +77,30 @@ uv run models/qwen3_core/grpo_trainer.py \
   --debug_log_every_calls 5 \
   --debug_log_num_samples 2
 
+while kill -0 409799 2>/dev/null; do sleep 30; done
 PYTORCH_ALLOC_CONF=expandable_segments:True \
 uv run models/qwen3_core/grpo_trainer.py \
-  --model_name models/qwen3_core/model_assets/saya_rp_7b_v2_sft \
-  --train_data /mnt/d/rp_data/grpo/grpo3_train.jsonl \
-  --eval_data /mnt/d/rp_data/grpo/grpo3_eval.jsonl \
-  --output_dir models/qwen3_core/model_assets/saya_rp_7b_v2_grpo \
+  --model_name models/qwen3_core/model_assets/sft2 \
+  --train_data /mnt/d/rp_data/grpo/grpo2_train.jsonl \
+  --eval_data /mnt/d/rp_data/grpo/grpo2_eval.jsonl \
+  --output_dir models/qwen3_core/model_assets/grpo \
   --per_device_train_batch_size 1 \
   --per_device_eval_batch_size 2 \
   --gradient_accumulation_steps 16 \
-  --num_train_epochs 3 \
+  --num_train_epochs 2 \
   --learning_rate 2e-6 \
-  --max_prompt_length 768 \
+  --max_prompt_length 1024 \
   --max_completion_length 200 \
-  --num_generations 2
+  --num_generations 2 \
   --use_lora \
   --load_in_4bit \
   --bnb_4bit_quant_type nf4 \
   --bnb_4bit_use_double_quant \
   --bnb_4bit_compute_dtype bfloat16 \
-  --gradient_checkpointing
+  --gradient_checkpointing \
+  --debug_log_completions \
+  --debug_log_every_calls 5 \
+  --debug_log_num_samples 2
 """
 
 import argparse

@@ -127,11 +127,12 @@ uv run models/qwen3_core/sft_trainer_qlora.py \
   --metric_for_best_model eval_loss \
   --assistant_only_loss
 
-while kill -0 13237 2>/dev/null; do sleep 30; done
+while kill -0 321404 2>/dev/null; do sleep 30; done
 uv run models/qwen3_core/sft_trainer_qlora.py \
-  --model_name models/qwen3_core/model_assets/sft1 \
+  --model_name models/qwen3_core/model_assets/qwen3-8b \
   --data_path /mnt/d/rp_data/rewrite/multiturn_rewrite.jsonl \
-  --output_dir models/qwen3_core/model_assets/lasttry_stage2 \
+  --output_dir models/qwen3_core/model_assets/qwen3_8b_stage2 \
+  --init_adapter_path models/qwen3_core/model_assets/qwen3_8b_stage1/lora_adapter \
   --load_in_4bit \
   --bf16 \
   --gradient_checkpointing \

@@ -28,9 +28,9 @@ uv run models/qwen3_core/merge.py \
 
 while kill -0 1866426 2>/dev/null; do sleep 30; done
 uv run models/qwen3_core/merge.py \
-  --base_model models/qwen3_core/model_assets/YanoljaNEXT-EEVE-7B-v2 \
-  --adapter_path models/qwen3_core/model_assets/lasttry_stage1/lora_adapter \
-  --output_dir models/qwen3_core/model_assets/sft1 \
+  --base_model models/qwen3_core/model_assets/qwen3-8b \
+  --adapter_path models/qwen3_core/model_assets/qwen3_8b_stage2/lora_adapter \
+  --output_dir models/qwen3_core/model_assets/qwen3_8b_sft \
   --dtype bf16 \
   --device_map auto \
   --offload_dir /tmp/merge_offload \
