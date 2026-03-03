@@ -1,0 +1,776 @@
+from __future__ import annotations
+
+"""Qwen RP용 GRPO 학습 스크립트 (Colab용).
+
+Colab 환경에서 바로 실행할 수 있도록 경로/환경 설정을 최소화한 버전이다.
+기능은 grpo_trainer.py와 동일하며, uv 없이 python으로 실행한다.
+"""
+
+import inspect
+import os
+import re
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple
+
+import torch
+from datasets import Dataset, load_dataset
+from peft import LoraConfig, prepare_model_for_kbit_training
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from trl import GRPOConfig, GRPOTrainer
+
+
+PLAYER_NAMES = ("하야토", "카즈키", "소마")
+ROLE_MARKERS = ("SYSTEM:", "USER:", "ASSISTANT:", "role:", "<|im_start|", "<|assistant|")
+
+_DEBUG_LOG_COMPLETIONS: bool = False
+_DEBUG_LOG_EVERY_CALLS: int = 20
+_DEBUG_LOG_NUM_SAMPLES: int = 2
+_REWARD_CALL_COUNT: int = 0
+
+_THINK_RE = re.compile(r"<think>.*?</think>", flags=re.DOTALL)
+
+
+def _maybe_set_colab_env() -> None:
+    os.environ.setdefault("PYTORCH_ALLOC_CONF", "expandable_segments:True")
+
+
+# 유틸
+def _as_text(x: Any) -> str:
+    """보상 함수 입력을 문자열로 정규화한다."""
+    if x is None:
+        return ""
+    if isinstance(x, str):
+        return _THINK_RE.sub("", x).strip()
+    if isinstance(x, dict):
+        if isinstance(x.get("content"), str):
+            return _THINK_RE.sub("", x["content"]).strip()
+        return _THINK_RE.sub("", str(x)).strip()
+    if isinstance(x, list):
+        parts: List[str] = []
+        for item in x:
+            t = _as_text(item)
+            if t:
+                parts.append(t)
+        return "\n".join(parts)
+    return _THINK_RE.sub("", str(x)).strip()
+
+
+def _prompt_to_role_text(prompt: Any) -> str:
+    """프롬프트를 ROLE 접두어를 가진 평탄 텍스트로 변환한다."""
+    if isinstance(prompt, list):
+        out: List[str] = []
+        for m in prompt:
+            if not isinstance(m, dict):
+                continue
+            role = _as_text(m.get("role")).strip().upper()
+            content = _as_text(m.get("content")).strip()
+            if role and content:
+                out.append(f"{role}: {content}")
+        return "\n".join(out).strip()
+    return _as_text(prompt)
+
+
+def _extract_last_user_from_prompt(prompt: str) -> str:
+    """평탄한 prompt에서 마지막 USER 블록을 추출한다."""
+    if not prompt:
+        return ""
+    matches = re.findall(
+        r"USER:\s*(.*?)(?=\n(?:SYSTEM|USER|ASSISTANT):|\Z)",
+        prompt,
+        flags=re.DOTALL,
+    )
+    return matches[-1].strip() if matches else ""
+
+
+def _parse_prompt_protagonist_name(prompt: str) -> str:
+    """prompt에서 주인공 이름을 추정한다."""
+    if not prompt:
+        return ""
+    m = re.search(r"당신은(?:\s+이제)?\s+([가-힣A-Za-z0-9_]+)(?:다|입니다)\.?", prompt)
+    if m:
+        return m.group(1).strip()
+    m = re.search(r"(?:주인공|assistant)\s*이름\s*[:：]\s*([가-힣A-Za-z0-9_]+)", prompt)
+    if m:
+        return m.group(1).strip()
+    m = re.search(r"\n\s*이름\s*[:：]\s*([가-힣A-Za-z0-9_]+)", prompt)
+    return m.group(1).strip() if m else ""
+
+
+def _parse_prompt_speech_style(prompt: str) -> str:
+    """prompt에서 목표 말투를 추정한다."""
+    if not prompt:
+        return ""
+    if re.search(r"기본\s*말투\s*[:：]\s*존댓말|존댓말", prompt):
+        return "formal"
+    if re.search(r"기본\s*말투\s*[:：]\s*반말|반말", prompt):
+        return "informal"
+    return ""
+
+
+def _normalize_completion_for_scoring(raw: str) -> Tuple[str, str, bool]:
+    """completion을 채점용 2블록으로 정규화한다.
+
+    Returns:
+        narration: 서술 블록
+        quote: 대사 블록(큰따옴표 포함)
+        valid: 형식 유효 여부
+    """
+    txt = (raw or "").strip()
+    if not txt:
+        return "", "", False
+
+    lines = [ln.strip() for ln in txt.splitlines() if ln.strip()]
+    if len(lines) < 2:
+        return "", "", False
+
+    narration = lines[0]
+    quote = ""
+    for ln in lines[1:]:
+        if re.fullmatch(r'"[^"\n]{2,300}"', ln):
+            quote = ln
+            break
+
+    if not quote:
+        return "", "", False
+
+    # 엄격한 형식: 유효 라인이 정확히 2줄이어야 한다.
+    valid = len(lines) == 2
+    return narration, quote, valid
+
+
+def _has_quote_tail_violation(raw: str) -> bool:
+    """둘째 줄 대사 닫힘 이후에 잔여 텍스트가 있으면 True를 반환한다."""
+    txt = (raw or "").strip()
+    if not txt:
+        return False
+    lines = [ln.strip() for ln in txt.splitlines() if ln.strip()]
+    if len(lines) < 2:
+        return False
+    second = lines[1]
+    m = re.search(r'"[^"\n]{2,300}"', second)
+    if not m:
+        return False
+    trailing = second[m.end() :].strip()
+    return len(trailing) > 0
+
+
+def _formal_count_in_quote(quote: str) -> int:
+    """대사 블록에서 문장 끝 종결어미 기준 존댓말 출현 수를 계산한다."""
+    sentence_chunks = [
+        seg.strip()
+        for seg in re.split(r"[.!?…\n]+", quote)
+        if seg and seg.strip()
+    ]
+    endings: List[str] = []
+    for seg in sentence_chunks:
+        cleaned = re.sub(r'["\'“”‘’,\s]+$', "", seg)
+        m = re.search(r"([가-힣]+)$", cleaned)
+        if m:
+            endings.append(m.group(1))
+
+    formal_suffixes = (
+        "습니다", "습니까", "세요", "해요", "이에요", "예요",
+        "네요", "군요", "죠", "까요", "어요", "아요", "여요",
+        "게요", "드립니다", "랍니다", "입니다",
+    )
+    return sum(1 for e in endings if e.endswith(formal_suffixes))
+
+
+def _rough_token_len(text: str) -> int:
+    """간이 토큰 길이를 계산한다."""
+    if not text:
+        return 0
+    pieces = re.findall(r"[가-힣A-Za-z0-9]+|[^\s]", text)
+    return len(pieces)
+
+
+def _debug_log_completion_samples(completions: List[Any]) -> None:
+    """디버그 모드에서 completion 샘플의 원문/정규화 결과를 출력한다."""
+    global _REWARD_CALL_COUNT
+    if not _DEBUG_LOG_COMPLETIONS:
+        return
+
+    _REWARD_CALL_COUNT += 1
+    if _REWARD_CALL_COUNT % max(1, _DEBUG_LOG_EVERY_CALLS) != 0:
+        return
+
+    print(f"[GRPO_DEBUG] reward_call={_REWARD_CALL_COUNT} batch_size={len(completions)}")
+    for i, comp in enumerate(completions[: max(1, _DEBUG_LOG_NUM_SAMPLES)]):
+        raw = _as_text(comp)
+        n1, q1, valid = _normalize_completion_for_scoring(raw)
+        quote_count = raw.count('\"')
+        print(f"[GRPO_DEBUG] sample={i} raw_chars={len(raw)} raw_quotes={quote_count}")
+        print(f"[GRPO_DEBUG] sample={i} raw_head={raw[:160].replace(chr(10), '<NL>')}")
+        print(f"[GRPO_DEBUG] sample={i} raw_tail={raw[-160:].replace(chr(10), '<NL>')}")
+        print(f"[GRPO_DEBUG] sample={i} norm_valid={valid}")
+        print(f"[GRPO_DEBUG] sample={i} norm_narr={n1}")
+        print(f"[GRPO_DEBUG] sample={i} norm_quote={q1}")
+
+
+# 보상 함수
+def reward_format(prompts: List[Any], completions: List[Any], **kwargs: Any) -> List[float]:
+    """형식 보상. 부분 점수 방식으로 서술/대사/2블록 준수를 평가한다."""
+    _debug_log_completion_samples(completions)
+    scores: List[float] = []
+    for comp in completions:
+        raw = _as_text(comp)
+        lines = [ln.strip() for ln in raw.splitlines() if ln.strip()]
+        _, quote, valid = _normalize_completion_for_scoring(raw)
+        score = 0.0
+
+        if lines:
+            first = lines[0]
+            if first and not first.startswith('"') and "USER:" not in first.upper() and "ASSISTANT:" not in first.upper():
+                score += 0.30
+
+        if quote:
+            score += 0.40
+
+        has_role_marker = any(marker in raw.upper() for marker in ROLE_MARKERS)
+        if valid and not has_role_marker:
+            score += 0.30
+
+        if _has_quote_tail_violation(raw):
+            score -= 0.60
+
+        scores.append(max(0.0, min(1.0, score)))
+    return scores
+
+
+def reward_role_split(prompts: List[Any], completions: List[Any], **kwargs: Any) -> List[float]:
+    """역할 혼동 패턴에 패널티를 적용한다."""
+    scores: List[float] = []
+    player_re = "|".join(PLAYER_NAMES)
+
+    for comp in completions:
+        raw = _as_text(comp)
+        upper = raw.upper()
+        penalty = 0.0
+
+        for marker in ROLE_MARKERS:
+            if marker in upper:
+                penalty += 0.45
+
+        if re.search(rf"(?:^|\n)\s*(?:{player_re})\s*[:：]", raw):
+            penalty += 0.55
+        if re.search(rf"(?:^|\n)\s*(?:{player_re}).{{0,16}}(?:말했|말한다|묻는다|대답했|속삭였|소리쳤)", raw):
+            penalty += 0.45
+
+        scores.append(max(0.0, 1.0 - penalty))
+
+    return scores
+
+
+def reward_length(prompts: List[Any], completions: List[Any], **kwargs: Any) -> List[float]:
+    """출력 길이와 종료 안정성을 함께 평가한다."""
+    scores: List[float] = []
+    for comp in completions:
+        raw = _as_text(comp)
+        upper = raw.upper()
+        n = _rough_token_len(raw)
+
+        if 40 <= n <= 140:
+            score = 1.0
+        elif 20 <= n < 40:
+            score = 0.70
+        elif 140 < n <= 200:
+            score = 0.70
+        elif 200 < n <= 240:
+            score = 0.35
+        else:
+            score = 0.10
+
+        if "USER:" in upper or "ASSISTANT:" in upper or "SYSTEM:" in upper:
+            score -= 0.40
+
+        scores.append(max(0.0, min(1.0, score)))
+    return scores
+
+
+def reward_character_consistency(prompts: List[Any], completions: List[Any], **kwargs: Any) -> List[float]:
+    """주인공 이름/말투 일관성 점수를 계산한다."""
+    scores: List[float] = []
+
+    for prompt, comp in zip(prompts, completions):
+        prompt_txt = _prompt_to_role_text(prompt)
+        raw = _as_text(comp)
+        narration, quote, valid = _normalize_completion_for_scoring(raw)
+        if not valid:
+            scores.append(0.0)
+            continue
+
+        protagonist = _parse_prompt_protagonist_name(prompt_txt)
+        style = _parse_prompt_speech_style(prompt_txt)
+
+        name_ok = (not protagonist) or (protagonist in narration)
+        formal_count = _formal_count_in_quote(quote)
+
+        style_ok = True
+        if style == "formal":
+            style_ok = formal_count >= 1
+        elif style == "informal":
+            style_ok = formal_count == 0
+
+        score = 1.0
+        if not name_ok:
+            score -= 0.35
+        if not style_ok:
+            score -= 0.45
+
+        scores.append(max(0.0, min(1.0, score)))
+
+    return scores
+
+
+def _messages_to_prompt(messages: Any) -> str:
+    """chat 메시지 리스트를 평탄한 prompt 문자열로 변환한다."""
+    if not isinstance(messages, list):
+        return ""
+
+    out: List[str] = []
+    for m in messages:
+        if not isinstance(m, dict):
+            continue
+        role = str(m.get("role", "")).strip().upper()
+        content = str(m.get("content", "")).strip()
+        if role and content:
+            out.append(f"{role}: {content}")
+
+    return "\n".join(out).strip()
+
+
+def _ensure_prompt_column(ds: Dataset) -> Dataset:
+    """데이터셋에 prompt 컬럼이 없으면 prompt_messages에서 생성한다."""
+    names = set(ds.column_names)
+    if "prompt" in names:
+        return ds
+    if "prompt_messages" in names:
+        return ds.map(
+            lambda x: {"prompt": _messages_to_prompt(x.get("prompt_messages"))},
+            desc="build prompt from prompt_messages",
+        )
+    raise ValueError("Dataset must contain 'prompt' or 'prompt_messages'.")
+
+
+def _drop_empty_prompt(ds: Dataset) -> Dataset:
+    """빈 prompt 행을 제거한다."""
+    def _ok_prompt(x: Any) -> bool:
+        p = x.get("prompt")
+        if isinstance(p, str):
+            return len(p.strip()) > 0
+        if isinstance(p, list):
+            return len(p) > 0
+        return False
+
+    return ds.filter(
+        _ok_prompt,
+        desc="drop empty prompt rows",
+    )
+
+
+def load_grpo_dataset(path: str) -> Dataset:
+    """JSONL을 로드하고 GRPO 입력 형식으로 정규화한다."""
+    ds = load_dataset("json", data_files=path, split="train")
+    ds = _ensure_prompt_column(ds)
+    if "prompt_messages" in set(ds.column_names):
+        ds = ds.map(
+            lambda x: {"prompt": x["prompt_messages"]} if isinstance(x.get("prompt_messages"), list) else {"prompt": x.get("prompt")},
+            desc="prefer prompt_messages as prompt",
+        )
+    ds = _drop_empty_prompt(ds)
+    return ds
+
+
+def _prepare_generation_inputs_from_row(row: Dict[str, Any]) -> Tuple[str, Optional[List[Dict[str, str]]]]:
+    """데이터셋 행에서 평탄 프롬프트와 chat 메시지 프롬프트를 추출한다."""
+    flat_prompt = _prompt_to_role_text(row.get("prompt")).strip()
+
+    prompt_messages: Optional[List[Dict[str, str]]] = None
+    pm = row.get("prompt_messages")
+    if not isinstance(pm, list) and isinstance(row.get("prompt"), list):
+        pm = row.get("prompt")
+    if isinstance(pm, list):
+        cleaned: List[Dict[str, str]] = []
+        for m in pm:
+            if not isinstance(m, dict):
+                continue
+            role = _as_text(m.get("role")).strip()
+            content = _as_text(m.get("content")).strip()
+            if role and content:
+                cleaned.append({"role": role, "content": content})
+        if cleaned:
+            prompt_messages = cleaned
+
+    return flat_prompt, prompt_messages
+
+
+def _generate_with_flat_prompt(
+    model: Any,
+    tokenizer: Any,
+    prompt: str,
+    max_new_tokens: int,
+    temperature: float,
+    top_p: float,
+    top_k: int,
+    repetition_penalty: float,
+) -> str:
+    """평탄 문자열 프롬프트를 바로 넣어 생성한다."""
+    if not prompt:
+        return ""
+
+    inputs = tokenizer(prompt, return_tensors="pt")
+    inputs = {k: v.to(model.device) for k, v in inputs.items()}
+    prompt_len = int(inputs["input_ids"].shape[-1])
+
+    gen_kwargs: Dict[str, Any] = {
+        "max_new_tokens": max_new_tokens,
+        "do_sample": True,
+        "temperature": temperature,
+        "top_p": top_p,
+        "top_k": top_k,
+        "repetition_penalty": repetition_penalty,
+        "renormalize_logits": True,
+        "use_cache": True,
+        "eos_token_id": tokenizer.eos_token_id,
+        "pad_token_id": tokenizer.eos_token_id,
+    }
+
+    out = model.generate(**inputs, **gen_kwargs)
+    gen_ids = out[0][prompt_len:]
+    return tokenizer.decode(gen_ids, skip_special_tokens=True).strip()
+
+
+def _generate_with_chat_template(
+    model: Any,
+    tokenizer: Any,
+    messages: List[Dict[str, str]],
+    max_new_tokens: int,
+    temperature: float,
+    top_p: float,
+    top_k: int,
+    repetition_penalty: float,
+) -> str:
+    """chat_template 기반 프롬프트로 생성한다."""
+    if not messages:
+        return ""
+
+    chat_prompt = tokenizer.apply_chat_template(
+        messages,
+        tokenize=False,
+        add_generation_prompt=True,
+    )
+
+    inputs = tokenizer(chat_prompt, return_tensors="pt")
+    inputs = {k: v.to(model.device) for k, v in inputs.items()}
+    prompt_len = int(inputs["input_ids"].shape[-1])
+
+    gen_kwargs: Dict[str, Any] = {
+        "max_new_tokens": max_new_tokens,
+        "do_sample": True,
+        "temperature": temperature,
+        "top_p": top_p,
+        "top_k": top_k,
+        "repetition_penalty": repetition_penalty,
+        "renormalize_logits": True,
+        "use_cache": True,
+        "eos_token_id": tokenizer.eos_token_id,
+        "pad_token_id": tokenizer.eos_token_id,
+    }
+
+    out = model.generate(**inputs, **gen_kwargs)
+    gen_ids = out[0][prompt_len:]
+    return tokenizer.decode(gen_ids, skip_special_tokens=True).strip()
+
+
+def run_dry_generation_compare(
+    model: Any,
+    tokenizer: Any,
+    dataset: Dataset,
+    sample_count: int,
+    max_new_tokens: int,
+    temperature: float,
+    top_p: float,
+    top_k: int,
+    repetition_penalty: float,
+) -> None:
+    """훈련 없이 생성 경로 차이를 출력해 진단한다."""
+    n = min(len(dataset), max(1, sample_count))
+    print(f"[DRY_RUN] start compare samples={n}")
+
+    for i in range(n):
+        row = dataset[i]
+        flat_prompt, prompt_messages = _prepare_generation_inputs_from_row(row)
+        ref = _as_text(row.get("reference")).strip()
+        user_tail = _extract_last_user_from_prompt(flat_prompt)
+
+        print("\n" + "=" * 80)
+        print(f"[DRY_RUN] sample={i}")
+        print(f"[DRY_RUN] user_tail={user_tail[:180]}")
+        print(f"[DRY_RUN] reference={ref[:180]}")
+
+        flat_out = _generate_with_flat_prompt(
+            model=model,
+            tokenizer=tokenizer,
+            prompt=flat_prompt,
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+            top_p=top_p,
+            top_k=top_k,
+            repetition_penalty=repetition_penalty,
+        )
+        n1, q1, v1 = _normalize_completion_for_scoring(flat_out)
+        print(f"[DRY_RUN][flat] chars={len(flat_out)} quotes={flat_out.count(chr(34))} valid={v1}")
+        print(f"[DRY_RUN][flat] narr={n1}")
+        print(f"[DRY_RUN][flat] quote={q1}")
+        print(f"[DRY_RUN][flat] head={flat_out[:220].replace(chr(10), '<NL>')}")
+
+        if prompt_messages:
+            chat_out = _generate_with_chat_template(
+                model=model,
+                tokenizer=tokenizer,
+                messages=prompt_messages,
+                max_new_tokens=max_new_tokens,
+                temperature=temperature,
+                top_p=top_p,
+                top_k=top_k,
+                repetition_penalty=repetition_penalty,
+            )
+            n2, q2, v2 = _normalize_completion_for_scoring(chat_out)
+            print(f"[DRY_RUN][chat] chars={len(chat_out)} quotes={chat_out.count(chr(34))} valid={v2}")
+            print(f"[DRY_RUN][chat] narr={n2}")
+            print(f"[DRY_RUN][chat] quote={q2}")
+            print(f"[DRY_RUN][chat] head={chat_out[:220].replace(chr(10), '<NL>')}")
+        else:
+            print("[DRY_RUN][chat] prompt_messages not found in this row")
+
+    print("[DRY_RUN] done")
+
+
+def build_lora_config(args: argparse.Namespace) -> LoraConfig:
+    """Qwen 계열 모듈에 맞는 LoRA 설정을 생성한다."""
+    return LoraConfig(
+        r=args.lora_r,
+        lora_alpha=args.lora_alpha,
+        lora_dropout=args.lora_dropout,
+        bias="none",
+        task_type="CAUSAL_LM",
+        target_modules=[
+            "q_proj",
+            "k_proj",
+            "v_proj",
+            "o_proj",
+            "gate_proj",
+            "up_proj",
+            "down_proj",
+        ],
+    )
+
+
+def resolve_dtype(name: str) -> torch.dtype:
+    """문자열 dtype을 torch dtype으로 변환한다."""
+    if name == "float16":
+        return torch.float16
+    if name == "float32":
+        return torch.float32
+    return torch.bfloat16
+
+
+@dataclass
+class ColabConfig:
+    """Colab 실행용 설정."""
+    model_name: str
+    train_data: str
+    eval_data: Optional[str]
+    output_dir: str
+    max_prompt_length: int = 2048
+    max_completion_length: int = 220
+    num_generations: int = 4
+    per_device_train_batch_size: int = 1
+    per_device_eval_batch_size: int = 1
+    gradient_accumulation_steps: int = 16
+    num_train_epochs: float = 2.0
+    learning_rate: float = 1e-6
+    warmup_ratio: float = 0.03
+    logging_steps: int = 10
+    save_steps: int = 100
+    save_total_limit: int = 4
+    eval_steps: int = 100
+    seed: int = 42
+    bf16: bool = False
+    fp16: bool = False
+    gradient_checkpointing: bool = False
+    temperature: float = 0.7
+    top_p: float = 0.9
+    top_k: int = 30
+    repetition_penalty: float = 1.1
+    debug_log_completions: bool = False
+    debug_log_every_calls: int = 20
+    debug_log_num_samples: int = 2
+    dry_run_compare: bool = False
+    dry_run_samples: int = 8
+    use_lora: bool = False
+    lora_r: int = 16
+    lora_alpha: int = 32
+    lora_dropout: float = 0.05
+    load_in_4bit: bool = False
+    bnb_4bit_quant_type: str = "nf4"
+    bnb_4bit_use_double_quant: bool = False
+    bnb_4bit_compute_dtype: str = "bfloat16"
+
+
+def run(config: ColabConfig) -> None:
+    """GRPO 학습을 실행한다."""
+    _maybe_set_colab_env()
+    args = config
+
+    global _DEBUG_LOG_COMPLETIONS, _DEBUG_LOG_EVERY_CALLS, _DEBUG_LOG_NUM_SAMPLES
+    _DEBUG_LOG_COMPLETIONS = bool(args.debug_log_completions)
+    _DEBUG_LOG_EVERY_CALLS = max(1, int(args.debug_log_every_calls))
+    _DEBUG_LOG_NUM_SAMPLES = max(1, int(args.debug_log_num_samples))
+
+    if args.load_in_4bit and not args.use_lora:
+        raise ValueError("QLoRA mode requires --use_lora.")
+
+    if args.eval_data and args.num_generations % args.per_device_eval_batch_size != 0:
+        if args.per_device_eval_batch_size % args.num_generations != 0:
+            raise ValueError(
+                "Eval batch size must be divisible by num_generations. "
+                f"got eval_bs={args.per_device_eval_batch_size}, num_generations={args.num_generations}"
+            )
+
+    tokenizer = AutoTokenizer.from_pretrained(args.model_name, use_fast=True)
+    tokenizer.padding_side = "left"
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+
+    train_ds = load_grpo_dataset(args.train_data)
+    eval_ds = load_grpo_dataset(args.eval_data) if args.eval_data else None
+
+    grpo_kwargs = {
+        "output_dir": args.output_dir,
+        "per_device_train_batch_size": args.per_device_train_batch_size,
+        "per_device_eval_batch_size": args.per_device_eval_batch_size,
+        "gradient_accumulation_steps": args.gradient_accumulation_steps,
+        "num_train_epochs": args.num_train_epochs,
+        "learning_rate": args.learning_rate,
+        "warmup_ratio": args.warmup_ratio,
+        "logging_steps": args.logging_steps,
+        "save_steps": args.save_steps,
+        "save_total_limit": args.save_total_limit,
+        "eval_strategy": "steps" if eval_ds is not None else "no",
+        "eval_steps": args.eval_steps if eval_ds is not None else None,
+        "bf16": args.bf16,
+        "fp16": args.fp16,
+        "gradient_checkpointing": args.gradient_checkpointing,
+        "max_prompt_length": args.max_prompt_length,
+        "max_completion_length": args.max_completion_length,
+        "num_generations": args.num_generations,
+        "temperature": args.temperature,
+        "top_p": args.top_p,
+        "top_k": args.top_k,
+        "repetition_penalty": args.repetition_penalty,
+        "remove_unused_columns": False,
+        "report_to": "none",
+        "seed": args.seed,
+        # reward_funcs 순서:
+        # [format, role_split, character_consistency, length]
+        "reward_weights": [0.34, 0.26, 0.26, 0.14],
+    }
+    supported = set(inspect.signature(GRPOConfig.__init__).parameters.keys())
+    dropped = sorted(k for k in grpo_kwargs if k not in supported)
+    if dropped:
+        print(f"[warn] Unsupported GRPOConfig kwargs in current trl: {dropped}")
+    grpo_args = GRPOConfig(**{k: v for k, v in grpo_kwargs.items() if k in supported})
+
+    peft_cfg = build_lora_config(args) if args.use_lora else None
+    model_arg: Any = args.model_name
+
+    if args.load_in_4bit:
+        compute_dtype = resolve_dtype(args.bnb_4bit_compute_dtype)
+        quant_cfg = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type=args.bnb_4bit_quant_type,
+            bnb_4bit_compute_dtype=compute_dtype,
+            bnb_4bit_use_double_quant=args.bnb_4bit_use_double_quant,
+        )
+        model = AutoModelForCausalLM.from_pretrained(
+            args.model_name,
+            device_map="auto",
+            torch_dtype=compute_dtype,
+            quantization_config=quant_cfg,
+            attn_implementation="sdpa",
+        )
+        model = prepare_model_for_kbit_training(model)
+        model_arg = model
+
+    if args.dry_run_compare:
+        dry_model = model_arg
+        if isinstance(dry_model, str):
+            dry_model = AutoModelForCausalLM.from_pretrained(
+                dry_model,
+                device_map="auto",
+                torch_dtype=torch.bfloat16 if args.bf16 else None,
+                attn_implementation="sdpa",
+            )
+        dry_model.eval()
+        run_dry_generation_compare(
+            model=dry_model,
+            tokenizer=tokenizer,
+            dataset=train_ds,
+            sample_count=args.dry_run_samples,
+            max_new_tokens=args.max_completion_length,
+            temperature=args.temperature,
+            top_p=args.top_p,
+            top_k=args.top_k,
+            repetition_penalty=args.repetition_penalty,
+        )
+        return
+
+    reward_funcs = [
+        reward_format,
+        reward_role_split,
+        reward_character_consistency,
+        reward_length,
+    ]
+
+    trainer = GRPOTrainer(
+        model=model_arg,
+        reward_funcs=reward_funcs,
+        args=grpo_args,
+        train_dataset=train_ds,
+        eval_dataset=eval_ds,
+        processing_class=tokenizer,
+        peft_config=peft_cfg,
+    )
+
+    trainer.train()
+    trainer.save_model(args.output_dir)
+    tokenizer.save_pretrained(args.output_dir)
+
+
+if __name__ == "__main__":
+    # 노트북에서는 아래 Config를 직접 수정한 뒤 run(config)를 호출하면 된다.
+    default = ColabConfig(
+        model_name="qwen3_8b_sft",
+        train_data="grpo2_train.jsonl",
+        eval_data="grpo2_eval.jsonl",
+        output_dir="qwen3_8b_grpo",
+        per_device_train_batch_size=1,
+        per_device_eval_batch_size=4,
+        gradient_accumulation_steps=16,
+        num_train_epochs=2,
+        learning_rate=2e-6,
+        max_prompt_length=1024,
+        max_completion_length=200,
+        num_generations=4,
+        use_lora=True,
+        load_in_4bit=True,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_use_double_quant=True,
+        bnb_4bit_compute_dtype="bfloat16",
+        gradient_checkpointing=True,
+    )
+    default.debug_log_completions = True
+    default.debug_log_every_calls = 5
+    default.debug_log_num_samples = 2
+    run(default)

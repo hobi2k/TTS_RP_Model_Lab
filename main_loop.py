@@ -30,8 +30,8 @@ class MainLoop:
         self.llm_engine = QwenEngine(
             default_gen=GenerationConfig(
                 max_new_tokens=200,
-                temperature=0.5,
-                top_p=0.9,
+                temperature=0.7,
+                top_p=0.95,
                 top_k=40,
                 repetition_penalty=1.12,
                 no_repeat_ngram_size=4,

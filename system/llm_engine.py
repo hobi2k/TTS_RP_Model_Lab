@@ -27,8 +27,8 @@ class GenerationConfig:
     """생성 파라미터 설정값."""
 
     max_new_tokens: int = 180
-    temperature: float = 0.6
-    top_p: float = 0.9
+    temperature: float = 0.7
+    top_p: float = 0.95
     top_k: int = 50
     repetition_penalty: float = 1.12
     no_repeat_ngram_size: int = 4
@@ -52,7 +52,7 @@ class QwenEngine:
         self.resolved_base_model_id = str(
             Path(base_model_id)
             if base_model_id is not None
-            else project_root / "models" / "qwen3_core" / "model_assets" / "saya_rp_7b_v2"
+            else project_root / "models" / "qwen3_core" / "model_assets" / "saya_rp_7b_v3"
         )
 
         self.backend = "hf"

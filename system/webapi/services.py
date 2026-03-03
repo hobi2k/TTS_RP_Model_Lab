@@ -12,10 +12,12 @@ from system.llm_engine import GenerationConfig
 
 
 class RuntimeServices:
-    """Lazy-loading service container for REST handlers.
+    """
+    Lazy-loading service container for REST handlers.
 
-    NOTE:
-    - /api/turn path intentionally mirrors main_loop.py execution order.
+    - LLM, Translator, TTS 등 무거운 리소스는 실제 사용 시점까지 로딩을 지연한다.
+    - main_loop.py와 동일한 LLM/Translator/TTS 인스턴스를 공유하여 일관된 상태(history/memory) 유지한다.
+    - chat/translate/parse/tts/turn 등의 메서드를 통해 REST 핸들러에서 필요한 기능을 제공한다.
     """
 
     def __init__(self) -> None:
@@ -33,7 +35,7 @@ class RuntimeServices:
         project_root = Path(__file__).resolve().parents[2]
         self.qwen_model = os.getenv(
             "QWEN_MODEL_DIR",
-            str(project_root / "models" / "qwen3_core" / "model_assets" / "saya_rp_7b_v2"),
+            str(project_root / "models" / "qwen3_core" / "model_assets" / "saya_rp_7b_v3"),
         )
         self.trans_base = os.getenv(
             "TRANS_MODEL_DIR",
@@ -51,8 +53,8 @@ class RuntimeServices:
                     base_model_id=self.qwen_model,
                     default_gen=GenerationConfig(
                         max_new_tokens=200,
-                        temperature=0.6,
-                        top_p=0.9,
+                        temperature=0.7,
+                        top_p=0.95,
                         top_k=50,
                         repetition_penalty=1.12,
                         no_repeat_ngram_size=4,
