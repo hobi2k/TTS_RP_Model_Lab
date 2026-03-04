@@ -14,11 +14,12 @@
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from huggingface_hub import snapshot_download
+from huggingface_hub import hf_hub_download, snapshot_download
 from huggingface_hub.utils import HfHubHTTPError
 
 
@@ -28,6 +29,7 @@ MODELS_DIR = ROOT_DIR / "models"
 QWEN_ASSETS_DIR = MODELS_DIR / "qwen3_core" / "model_assets"
 SBV2_DIR = MODELS_DIR / "Style-BERT-VITS2"
 SBV2_ASSETS_DIR = SBV2_DIR / "model_assets"
+SBV2_BERT_MODELS_JSON = SBV2_DIR / "bert" / "bert_models.json"
 
 
 @dataclass(frozen=True)
@@ -222,6 +224,38 @@ def _download_one(spec: ModelSpec, force: bool) -> None:
         _normalize_tts_files(spec)
 
 
+def _ensure_sbv2_bert_runtime_assets(force: bool) -> None:
+    if not SBV2_BERT_MODELS_JSON.exists():
+        raise FileNotFoundError(f"SBV2 BERT 모델 목록 파일이 없습니다: {SBV2_BERT_MODELS_JSON}")
+
+    with SBV2_BERT_MODELS_JSON.open(encoding="utf-8") as fp:
+        models = json.load(fp)
+
+    # 현재 워커는 일본어 tokenizer + ONNX BERT만 사용한다.
+    required_keys = (
+        "deberta-v2-large-japanese-char-wwm",
+        "deberta-v2-large-japanese-char-wwm-onnx",
+    )
+
+    for key in required_keys:
+        spec = models[key]
+        target_dir = SBV2_DIR / "bert" / key
+        target_dir.mkdir(parents=True, exist_ok=True)
+        for filename in spec["files"]:
+            target_file = target_dir / filename
+            if force and target_file.exists():
+                target_file.unlink()
+            if target_file.exists():
+                continue
+            print(f"[DOWNLOAD] sbv2_bert:{key}:{filename}")
+            hf_hub_download(
+                repo_id=spec["repo_id"],
+                filename=filename,
+                local_dir=str(target_dir),
+            )
+            print(f"[DONE] sbv2_bert:{key}:{filename}")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="프로젝트 모델을 data/ 와 models/ 아래에 내려받는다.")
     parser.add_argument(
@@ -245,6 +279,9 @@ def main() -> None:
 
     for key in target_keys:
         _download_one(SPECS[key], force=args.force)
+
+    if any(SPECS[key].kind == "tts" for key in target_keys):
+        _ensure_sbv2_bert_runtime_assets(force=args.force)
 
     print("[ALL DONE] initialize.py completed.")
 

@@ -428,8 +428,24 @@ RTX 5080 / WSL 기준 메모:
 6. 생성된 wav 경로를 stdout JSON으로 반환하고, WebAPI/CLI가 그 경로를 소비합니다.
 
 참고:
-- `model_assets/tts/saya/*.onnx`와 `model_assets/tts/mai/*.onnx`가 존재해야 합니다.
-- `bert/deberta-v2-large-japanese-char-wwm-onnx`와 tokenizer 디렉터리가 필요합니다.
+- 실제 런타임 경로는 `model_assets/saya/`와 `model_assets/mai/`입니다.
+- `bert/deberta-v2-large-japanese-char-wwm/` 아래 tokenizer + `pytorch_model.bin`이 필요합니다.
+- `bert/deberta-v2-large-japanese-char-wwm-onnx/` 아래 tokenizer + `model_fp16.onnx`가 필요합니다.
+
+초기화:
+```bash
+uv run initialize.py --only tts_saya_v2
+```
+
+또는:
+```bash
+uv run initialize.py --only tts_mai_v2
+```
+
+루트 `initialize.py`는 TTS 화자 ONNX 자산뿐 아니라, 현재 워커가 직접 참조하는
+일본어 BERT 본체(`pytorch_model.bin`)와 ONNX BERT(`model_fp16.onnx`)도 함께 다운로드합니다.
+따라서 SBV2 워커를 `main_loop.py`에서 바로 쓸 때는 별도로
+`models/Style-BERT-VITS2/initialize.py`를 먼저 돌리지 않아도 되도록 맞춰 둔 상태입니다.
 
 ### B) 레거시 경로(sbv2_core)
 `models/sbv2_core`는 과거 실험/변환 스크립트 보관용입니다.
@@ -483,7 +499,7 @@ REST 엔드포인트(현재):
 - GRPO 데이터: `$DATA_ROOT/grpo/*.jsonl`
 - RP LoRA/머지 모델: `models/qwen3_core/model_assets/*`
 - 번역 LoRA/머지 모델: `models/qwen3_core/model_assets/*`
-- TTS 체크포인트/ONNX: `models/Style-BERT-VITS2/model_assets/tts/<voice>/`
+- TTS 체크포인트/ONNX: `models/Style-BERT-VITS2/model_assets/<voice>/`
 - TTS 테스트 WAV: `models/Style-BERT-VITS2/outputs/` 또는 실행 시 지정 경로
 
 ## 6) 자주 발생하는 문제와 원인
@@ -505,15 +521,7 @@ litagin 쪽 pretrained를 그대로 사용하는 방식이 아니기 때문에
 - `model_fp16.onnx` 제거
 - `model.onnx`(FP32)만 사용
 
-## 6-2. `model_fp16.onnx` 파일이 없다고 뜸
-원인:
-- 런타임이 FP16 파일을 우선 찾는데 생성 실패/삭제됨
-
-대응:
-- BERT ONNX 디렉터리에 `model.onnx`가 있는지 확인
-- 런타임 코드/설정이 FP32 fallback 하도록 확인
-
-## 6-3. `word2ph` 길이 오류/토크나이저 불일치
+## 6-2. `word2ph` 길이 오류/토크나이저 불일치
 원인:
 - 외부 프로젝트로 이동 시 `pyopenjtalk`, `transformers`, tokenizer/BERT 파일 버전 차이
 
@@ -521,7 +529,7 @@ litagin 쪽 pretrained를 그대로 사용하는 방식이 아니기 때문에
 - `sbv_runtime/requirements_runtime_onnx.txt` 버전 고정 사용
 - BERT tokenizer 파일과 ONNX 모델을 항상 같은 소스에서 함께 배포
 
-## 6-4. CUDA provider 미검출
+## 6-3. CUDA provider 미검출
 에러/경고 예시:
 - `CUDAExecutionProvider is not in available provider names`
 
@@ -532,7 +540,7 @@ litagin 쪽 pretrained를 그대로 사용하는 방식이 아니기 때문에
 - CPU 실행으로 먼저 검증
 - CUDA 사용 시 `onnxruntime-gpu` + 드라이버/CUDA 호환성 점검
 
-## 6-5. RTX 50xx + Torch 커널 오류
+## 6-4. RTX 50xx + Torch 커널 오류
 에러 예시:
 - `no kernel image is available for execution on the device`
 
@@ -542,6 +550,18 @@ litagin 쪽 pretrained를 그대로 사용하는 방식이 아니기 때문에
 대응:
 - 사용하려는 torch 빌드를 환경에서 명시 고정
 - `uv` 동기화 시 재설치가 일어나지 않도록 lock/의존성 정책 점검
+
+## 6-5. `ffplay`가 없어서 재생 실패
+에러 예시:
+- `[Errno 2] No such file or directory: 'ffplay'`
+
+원인:
+- TTS WAV 생성은 끝났지만, CLI 재생 단계에서 `ffplay` 실행 파일을 찾지 못함
+
+대응:
+- Ubuntu/WSL에서 `sudo apt-get install -y ffmpeg`
+- `which ffplay`로 설치 확인
+- 서버/API 용도라면 자동 재생 없이 WAV 파일만 소비하도록 사용
 
 ## 6-6. GRPO 실행 중 `max_prompt_length` 인자 오류
 에러 예시:
