@@ -39,7 +39,7 @@ class RuntimeServices:
         )
         self.trans_base = os.getenv(
             "TRANS_MODEL_DIR",
-            str(project_root / "models" / "qwen3_core" / "model_assets" / "qtranslator_1.7b"),
+            str(project_root / "models" / "qwen3_core" / "model_assets" / "qtranslator_1.7b_v2"),
         )
 
     def _ensure_llm(self):

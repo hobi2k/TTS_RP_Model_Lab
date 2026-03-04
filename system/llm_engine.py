@@ -19,7 +19,7 @@ import re
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from peft import PeftModel
-from vllm import LLM
+from vllm import LLM, SamplingParams
 
 
 @dataclass
@@ -160,6 +160,7 @@ class QwenEngine:
             messages,
             tokenize=False,
             add_generation_prompt=True,
+            # enable_thinking=False,  # qwen3-8b용
         )
 
     @staticmethod
@@ -257,7 +258,6 @@ class QwenEngine:
         return self.tokenizer.decode(gen_ids, skip_special_tokens=True).strip()
 
     def _generate_vllm(self, prompt: str, cfg: GenerationConfig) -> str:
-        from vllm import SamplingParams
 
         sampling_params = SamplingParams(
             max_tokens=cfg.max_new_tokens,

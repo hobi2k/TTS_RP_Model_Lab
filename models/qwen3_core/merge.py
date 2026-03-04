@@ -28,9 +28,9 @@ uv run models/qwen3_core/merge.py \
 
 while kill -0 1866426 2>/dev/null; do sleep 30; done
 uv run models/qwen3_core/merge.py \
-  --base_model models/qwen3_core/model_assets/sft2 \
-  --adapter_path models/qwen3_core/model_assets/grpo \
-  --output_dir models/qwen3_core/model_assets/saya_rp_7b_v3 \
+  --base_model models/qwen3_core/model_assets/qwen3_8b_sft \
+  --adapter_path models/qwen3_core/model_assets/qwen3_8b_grpo \
+  --output_dir models/qwen3_core/model_assets/saya_rp_8b \
   --dtype bf16 \
   --device_map auto \
   --offload_dir /tmp/merge_offload \
