@@ -221,6 +221,7 @@ models/**/model_assets/
 models/sbv2_core/bert/
 models/qwen3_core/model_assets/
 data/generator/Tri-7B/
+data/generator/YanoljaNEXT-EEVE-7B-v2/
 data/embedding/BGE-m3-ko/
 
 # Local docs (project-specific)
