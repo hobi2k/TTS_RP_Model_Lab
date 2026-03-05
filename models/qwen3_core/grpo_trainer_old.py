@@ -19,16 +19,16 @@ uv run models/qwen3_core/grpo_trainer.py \
   --dry_run_compare \
   --dry_run_samples 8
 
-PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
-uv run models/qwen3_core/grpo_trainer.py \
-  --model_name models/qwen3_core/model_assets/qwen3_4b_rp \
-  --train_data /mnt/d/rp_data/grpo/grpo_train.jsonl \
-  --eval_data /mnt/d/rp_data/grpo/grpo_eval.jsonl \
+PYTORCH_ALLOC_CONF=expandable_segments:True \
+uv run models/qwen3_core/grpo_trainer_old.py \
+  --model_name models/qwen3_core/model_assets/saya_rp_4b_v3_sft \
+  --train_data /mnt/d/rp_data/grpo/grpo3_train.jsonl \
+  --eval_data /mnt/d/rp_data/grpo/grpo3_eval.jsonl \
   --output_dir models/qwen3_core/model_assets/qwen3_4b_rp_grpo \
   --per_device_train_batch_size 1 \
   --per_device_eval_batch_size 4 \
   --gradient_accumulation_steps 16 \
-  --num_train_epochs 2 \
+  --num_train_epochs 3 \
   --learning_rate 2e-6 \
   --max_prompt_length 1024 \
   --max_completion_length 220 \

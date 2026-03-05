@@ -26,11 +26,11 @@ uv run models/qwen3_core/merge.py \
   --safe_serialization \
   --trust_remote_code
 
-while kill -0 1866426 2>/dev/null; do sleep 30; done
+while kill -0 515960 2>/dev/null; do sleep 30; done
 uv run models/qwen3_core/merge.py \
-  --base_model models/qwen3_core/model_assets/qwen3_8b_sft \
-  --adapter_path models/qwen3_core/model_assets/qwen3_8b_grpo \
-  --output_dir models/qwen3_core/model_assets/saya_rp_8b \
+  --base_model models/qwen3_core/model_assets/qwen3-4b \
+  --adapter_path models/qwen3_core/model_assets/qwen3_4b_rp_lora_stage2/lora_adapter \
+  --output_dir models/qwen3_core/model_assets/saya_rp_4b_v3_sft \
   --dtype bf16 \
   --device_map auto \
   --offload_dir /tmp/merge_offload \
@@ -137,7 +137,7 @@ def main() -> None:
     adapter_dir = Path(args.adapter_path)
     tokenizer_dir = adapter_dir.parent / "tokenizer"
     tokenizer = AutoTokenizer.from_pretrained(
-        str(adapter_dir),
+        str(tokenizer_dir),
         trust_remote_code=args.trust_remote_code,
     )
 

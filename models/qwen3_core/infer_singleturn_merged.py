@@ -8,7 +8,7 @@ from peft import PeftModel
 
 # 경로
 MODEL_ASSETS_DIR = Path(__file__).resolve().parent / "model_assets"
-BASE_MODEL = str(MODEL_ASSETS_DIR / "saya_rp_8b")
+BASE_MODEL = str(MODEL_ASSETS_DIR / "saya_rp_7b_v3_sft")
 LORA_DIR = str(MODEL_ASSETS_DIR / "qwen3_4b_rp_grpo")
 TOKENIZER = str(MODEL_ASSETS_DIR / "qwen3_4b_rp_grpo")
 
@@ -56,9 +56,9 @@ def generate_reply(
     messages,
     max_new_tokens=550,
     do_sample=True,
-    temperature=0.7,
-    top_p=0.95,
-    repetition_penalty=1.05,
+    temperature=0.5,
+    top_p=0.85,
+    repetition_penalty=1.1,
 ):
     """
     messages: List[{"role": "system"|"user"|"assistant", "content": str}]

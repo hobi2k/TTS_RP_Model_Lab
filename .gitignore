@@ -219,6 +219,9 @@ __marimo__/
 # Local model asset directories
 models/**/model_assets/
 models/sbv2_core/bert/
+models/qwen3_core/model_assets/
+data/generator/Tri-7B/
+data/embedding/BGE-m3-ko/
 
 # Local docs (project-specific)
 docs/

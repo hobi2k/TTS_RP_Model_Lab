@@ -23,10 +23,12 @@ uv run models/qwen3_core/sft_trainer_qlora.py ...다음옵션...
 
 
 # Stage 1) 싱글턴 데이터로 1차 LoRA 학습
+while kill -0 132682 2>/dev/null; do sleep 30; done
 uv run models/qwen3_core/sft_trainer_qlora.py \
-  --model_name models/qwen3_core/model_assets/qwen3-4b-instruct \
+  --model_name models/qwen3_core/model_assets/qwen3-4b \
   --data_path /mnt/d/rp_data/singleturn/rp_singleturn_cleaned.jsonl \
   --output_dir models/qwen3_core/model_assets/qwen3_4b_rp_lora_stage1 \
+  --init_adapter_path models/qwen3_core/model_assets/qwen3_4b_lora1/final_adapter \
   --load_in_4bit \
   --bf16 \
   --gradient_checkpointing \
@@ -48,7 +50,7 @@ uv run models/qwen3_core/sft_trainer_qlora.py \
   --metric_for_best_model eval_loss \
   --assistant_only_loss
 
-while kill -0 311637 2>/dev/null; do sleep 30; done
+while kill -0 132682 2>/dev/null; do sleep 30; done
 uv run models/qwen3_core/sft_trainer_qlora.py \
   --model_name models/qwen3_core/model_assets/qwen3-8b \
   --data_path /mnt/d/rp_data/rewrite/singleturn_rewrite.jsonl \
@@ -127,12 +129,12 @@ uv run models/qwen3_core/sft_trainer_qlora.py \
   --metric_for_best_model eval_loss \
   --assistant_only_loss
 
-while kill -0 321404 2>/dev/null; do sleep 30; done
+while kill -0 323176 2>/dev/null; do sleep 30; done
 uv run models/qwen3_core/sft_trainer_qlora.py \
-  --model_name models/qwen3_core/model_assets/qwen3-8b \
+  --model_name models/qwen3_core/model_assets/qwen3-4b \
   --data_path /mnt/d/rp_data/rewrite/multiturn_rewrite.jsonl \
-  --output_dir models/qwen3_core/model_assets/qwen3_8b_stage2 \
-  --init_adapter_path models/qwen3_core/model_assets/qwen3_8b_stage1/lora_adapter \
+  --output_dir models/qwen3_core/model_assets/qwen3_4b_rp_lora_stage2 \
+  --init_adapter_path models/qwen3_core/model_assets/qwen3_4b_rp_lora_stage1/lora_adapter \
   --load_in_4bit \
   --bf16 \
   --gradient_checkpointing \
@@ -388,7 +390,7 @@ def main():
         if "{% generation %}" not in chat_template:
             # Qwen3-8B template may not include generation markers required by TRL assistant_only_loss.
             # Fallback to sibling 4B-instruct template when available.
-            fallback_template_path = model_dir.parent / "qwen3-4b-instruct" / "chat_template.jinja"
+            fallback_template_path = model_dir.parent / "qwen3-4b" / "chat_template.jinja"
             if fallback_template_path.exists():
                 fallback_template = fallback_template_path.read_text(encoding="utf-8")
                 if "{% generation %}" in fallback_template:

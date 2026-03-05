@@ -14,7 +14,8 @@ import argparse
 from dataclasses import dataclass
 from pathlib import Path
 
-from huggingface_hub import HfHubHTTPError, snapshot_download
+from huggingface_hub import snapshot_download
+from huggingface_hub.utils import HfHubHTTPError
 
 
 @dataclass(frozen=True)
