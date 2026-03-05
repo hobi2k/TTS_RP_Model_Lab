@@ -1,3 +1,10 @@
+"""단일턴 RP 추론 스크립트(LoRA adapter 결합형).
+
+특징:
+- Base 모델 위에 LoRA adapter를 덧씌운 상태로 추론한다.
+- 터미널에서 대화형으로 테스트할 때 사용한다.
+"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -19,6 +26,7 @@ DTYPE = torch.bfloat16
 
 # 로드
 def load_model():
+    """토크나이저, Base 모델, LoRA adapter를 순서대로 로드한다."""
     tokenizer = AutoTokenizer.from_pretrained(TOKENIZER, use_fast=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -106,6 +114,7 @@ def generate_reply(
 
 # 인터랙티브 루프
 def chat_loop():
+    """터미널 기반 인터랙티브 채팅 루프를 실행한다."""
     tokenizer, model = load_model()
 
     # SYSTEM (1회만)

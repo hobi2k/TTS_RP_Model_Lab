@@ -1,10 +1,10 @@
-from __future__ import annotations
-
 """Qwen RP용 GRPO 학습 스크립트 (Colab용).
 
 Colab 환경에서 바로 실행할 수 있도록 경로/환경 설정을 최소화한 버전이다.
 기능은 grpo_trainer.py와 동일하며, uv 없이 python으로 실행한다.
 """
+
+from __future__ import annotations
 
 import inspect
 import os
@@ -37,6 +37,7 @@ _EMBED_MAX_LENGTH: int = 256
 
 
 def _maybe_set_colab_env() -> None:
+    """Colab 메모리 단편화 완화를 위해 기본 allocator 설정을 주입한다."""
     os.environ.setdefault("PYTORCH_ALLOC_CONF", "expandable_segments:True")
 
 

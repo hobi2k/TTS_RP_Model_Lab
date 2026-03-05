@@ -29,6 +29,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
 def build_prompt(instruction: str, user_input: str) -> str:
+    """번역 추론용 Instruction/Input/Output 텍스트 프롬프트를 만든다."""
     instruction = (instruction or "").strip()
     user_input = (user_input or "").strip()
 
@@ -59,6 +60,7 @@ def extract_output_text(generated_text: str) -> str:
 
 
 def main() -> None:
+    """Base + LoRA 번역 모델을 로드해 단일 입력 문장을 번역한다."""
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--base_dir", type=str, required=True, help="Local base model directory")

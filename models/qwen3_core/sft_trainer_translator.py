@@ -98,6 +98,7 @@ def tokenize_function(
     tokenizer: AutoTokenizer,
     max_length: int,
 ) -> Dict[str, List[List[int]]]:
+    """배치 예제를 토크나이즈하고 output-only loss 라벨을 생성한다."""
 
     eos = tokenizer.eos_token or ""
 
@@ -166,9 +167,12 @@ def build_lora_config(r: int, alpha: int, dropout: float) -> LoraConfig:
 
 @dataclass
 class DataCollatorForCausalLM:
+    """가변 길이 causal LM 입력/라벨을 동일 길이 텐서로 패딩한다."""
+
     tokenizer: Any
 
     def __call__(self, features: List[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
+        """입력 배치를 패딩하고 pad 위치 라벨을 -100으로 마스킹한다."""
         # 1) labels를 분리 (tokenizer.pad에 넘기지 않음)
         labels = [f.pop("labels") for f in features]
 
@@ -198,6 +202,7 @@ class DataCollatorForCausalLM:
 
 # Main
 def main() -> None:
+    """번역 LoRA SFT 학습 엔트리포인트."""
     parser = argparse.ArgumentParser()
 
     # 경로

@@ -1,3 +1,10 @@
+"""단일턴 RP 추론 스크립트(머지 모델용).
+
+특징:
+- Base(또는 merge 완료) 모델만 로드해 대화형 루프를 실행한다.
+- chat template 기반 프롬프트를 사용한다.
+"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -18,6 +25,7 @@ DTYPE = torch.bfloat16
 
 # 로드
 def load_model():
+    """토크나이저와 4bit 양자화 모델을 로드한다."""
     tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL, use_fast=True, fix_mistral_regex=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -108,6 +116,7 @@ def generate_reply(
 # 인터랙티브 루프
 
 def chat_loop():
+    """터미널 기반 인터랙티브 채팅 루프를 실행한다."""
     tokenizer, model = load_model()
 
     # SYSTEM

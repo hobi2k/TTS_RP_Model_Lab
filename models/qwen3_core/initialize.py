@@ -63,6 +63,7 @@ def download_one(repo_id: str, local_subdir: str) -> Path:
 
 
 def main() -> None:
+    """`MODELS`에 정의된 저장소를 순회하며 로컬 model_assets에 저장한다."""
     MODEL_ASSETS_DIR.mkdir(parents=True, exist_ok=True)
 
     for local_subdir, repo_id in MODELS.items():

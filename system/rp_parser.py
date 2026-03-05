@@ -9,7 +9,13 @@ from typing import Optional
 
 @dataclass
 class RPBlock:
-    """파싱된 역할극 출력 컨테이너."""
+    """파싱된 역할극 출력 컨테이너.
+
+    Attributes:
+        narration: 인용부(대사) 이전의 서술 문장.
+        action: 현재 파이프라인에서는 미사용(호환성 유지용 필드).
+        dialogue_en: 큰따옴표 내부 대사.
+    """
     narration: str
     action: str
     dialogue_en: str
@@ -19,7 +25,13 @@ class RPParser:
     """큰따옴표 기반 RP 텍스트를 구조화 블록으로 파싱한다."""
 
     def parse(self, text: str) -> RPBlock:
-        """LLM 원문 텍스트를 RPBlock으로 변환한다."""
+        """LLM 원문 텍스트를 RPBlock으로 변환한다.
+
+        전략:
+        - 첫 번째 큰따옴표 구간을 대사로 본다.
+        - 인용부 앞 마지막 유효 줄을 서술로 채택한다.
+        - 따옴표가 없으면 전체를 대사로 간주한다.
+        """
 
         if not text or not text.strip():
             return RPBlock("", "", "")

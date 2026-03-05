@@ -4,6 +4,11 @@ SBV2 Worker Process (Style-BERT-VITS2 ONNX Inference Worker)
 - 프로세스 단위로 ONNX TTS 모델을 1회 로드
 - stdin JSON 요청을 받아 wav를 생성
 - stdout JSON으로 결과 경로를 반환
+
+입출력 규약:
+- 입력(한 줄 JSON): {"text": "...", "style": 0, "style_weight": 1.0, "speaker_name": "saya"}
+- 출력(성공): {"wav_path": "..."}
+- 출력(실패): {"error": "..."}
 """
 
 from __future__ import annotations
@@ -53,6 +58,12 @@ MODEL_SPECS = {
 
 
 def _resolve_style_name(runtime, style_index: int) -> str:
+    """정수 스타일 인덱스를 runtime의 실제 스타일 이름으로 변환한다.
+
+    Raises:
+        RuntimeError: 모델 style2id가 비어 있을 때.
+        IndexError: 스타일 인덱스가 범위를 벗어날 때.
+    """
     style_names = list(runtime.model.style2id.keys())
     if not style_names:
         raise RuntimeError("style2id가 비어 있어 스타일을 선택할 수 없습니다.")
@@ -64,6 +75,16 @@ def _resolve_style_name(runtime, style_index: int) -> str:
 
 
 def load_engine(speaker_name: str) -> dict:
+    """화자별 런타임 엔진을 로드한다.
+
+    검증 단계:
+    - speaker_name이 지원 목록에 존재하는지 확인
+    - ONNX/config/style_vectors 파일 존재 확인
+    - JP tokenizer/ONNX BERT 디렉터리 존재 확인
+
+    Returns:
+        dict: {"speaker_name", "runtime", "style_names"} 형태 엔진 상태.
+    """
     key = (speaker_name or DEFAULT_SPEAKER).strip().lower()
     if key not in MODEL_SPECS:
         raise ValueError(f"지원하지 않는 speaker_name: {speaker_name}. 사용 가능: {list(MODEL_SPECS.keys())}")
@@ -110,6 +131,10 @@ def load_engine(speaker_name: str) -> dict:
 
 
 def swap_engine_if_needed(current_engine: dict, target_speaker: str) -> dict:
+    """요청 화자가 현재 화자와 다를 때만 런타임을 교체한다.
+
+    기존 runtime에 unload 메서드가 있으면 호출 후 GC를 수행한다.
+    """
     target = (target_speaker or DEFAULT_SPEAKER).strip().lower()
     if target == current_engine.get("speaker_name"):
         return current_engine
@@ -130,16 +155,20 @@ def swap_engine_if_needed(current_engine: dict, target_speaker: str) -> dict:
     return load_engine(target)
 
 
+# 워커 시작 시 기본 화자 엔진을 1회 로드한다.
 ENGINE = load_engine(DEFAULT_SPEAKER)
+# 클라이언트(`SBV2WorkerClient`)가 준비 완료를 감지하는 sentinel line.
 print("__SBV2_READY__", flush=True)
 
 
 for line in sys.stdin:
+    # 한 줄 단위 JSON 프로토콜을 사용한다.
     line = line.strip()
     if not line:
         continue
 
     try:
+        # 1) 요청 파싱
         payload = json.loads(line)
 
         text = payload["text"]
@@ -147,6 +176,7 @@ for line in sys.stdin:
         style_weight = float(payload.get("style_weight", 1.0))
         speaker_name = payload.get("speaker_name", DEFAULT_SPEAKER)
 
+        # 2) 필요 시 화자 엔진 교체
         previous_speaker = ENGINE.get("speaker_name")
         ENGINE = swap_engine_if_needed(ENGINE, speaker_name)
         if previous_speaker != ENGINE.get("speaker_name"):
@@ -155,6 +185,7 @@ for line in sys.stdin:
                 flush=True,
             )
 
+        # 3) 스타일/화자 id 해석 후 추론
         runtime = ENGINE["runtime"]
         style_name = _resolve_style_name(runtime, style_index)
         speaker_key = ENGINE["speaker_name"]
@@ -169,10 +200,12 @@ for line in sys.stdin:
             line_split=False,
         )
 
+        # 4) 결과 WAV 저장 및 응답 반환
         out_path = OUT_DIR / f"tts_{abs(hash((speaker_key, style_name, text)))}.wav"
         sf.write(out_path, audio, sr)
 
         print(json.dumps({"wav_path": str(out_path)}), flush=True)
 
     except Exception as e:
+        # 워커는 죽지 않고 에러를 JSON으로 반환한다.
         print(json.dumps({"error": str(e)}), flush=True)

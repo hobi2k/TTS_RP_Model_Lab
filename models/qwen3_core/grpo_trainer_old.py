@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Qwen RP용 GRPO 학습 스크립트.
 
 설계 목표:
@@ -28,7 +26,7 @@ uv run models/qwen3_core/grpo_trainer_old.py \
   --per_device_train_batch_size 1 \
   --per_device_eval_batch_size 4 \
   --gradient_accumulation_steps 16 \
-  --num_train_epochs 3 \
+  --num_train_epochs 2 \
   --learning_rate 2e-6 \
   --max_prompt_length 1024 \
   --max_completion_length 220 \
@@ -107,6 +105,8 @@ uv run models/qwen3_core/grpo_trainer.py \
   --reward_embedding_max_length 256 \
   --gradient_checkpointing
 """
+
+from __future__ import annotations
 
 import argparse
 import re

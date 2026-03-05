@@ -1,26 +1,38 @@
 """시스템 프롬프트 컴파일러.
 
-from dataclasses import dataclass
-캐릭터 프로필과 출력 규칙을 기반으로 system 메시지를 생성한다.
+이 모듈은 캐릭터 프로필(이름/성격/말투)을 바탕으로
+RP 모델에 주입할 system 메시지를 생성한다.
+
+`PromptCompiler.compile()`은 현재 코드베이스의 기본 세계관/출력 규칙을
+한 번에 묶어 반환하며, WebAPI/CLI(main_loop)에서 공통으로 사용된다.
 """
 from dataclasses import dataclass
 from textwrap import dedent
 
+
 @dataclass
 class CharacterProfile:
-    """캐릭터 기본 설정."""
+    """시스템 프롬프트에 주입할 캐릭터 기초 정보."""
+
     name: str
     persona: str
     speaking_style: str
 
 
 class PromptCompiler:
-    """시스템 프롬프트 생성기."""
+    """RP 대화용 system 메시지 생성기."""
+
     def __init__(self, profile: CharacterProfile) -> None:
+        """프롬프트 생성기에 사용할 캐릭터 프로필을 보관한다."""
         self.profile = profile
 
     def compile(self) -> list[dict]:
-        """역할극 시스템 프롬프트를 생성한다."""
+        """역할극 시스템 메시지 배열을 생성한다.
+
+        Returns:
+            list[dict]: `tokenizer.apply_chat_template`에 바로 전달 가능한
+            OpenAI-style message 객체 리스트.
+        """
         protagonist = self.profile.name
         return [
             {

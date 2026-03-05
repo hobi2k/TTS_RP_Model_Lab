@@ -175,6 +175,7 @@ from trl import SFTTrainer, SFTConfig
 
 # LoRA 설정
 def build_lora_config(r: int, alpha: int, dropout: float) -> LoraConfig:
+    """Qwen 계열 모듈에 맞는 LoRA 설정을 구성한다."""
     return LoraConfig(
         r=r,
         lora_alpha=alpha,
@@ -190,6 +191,7 @@ def build_lora_config(r: int, alpha: int, dropout: float) -> LoraConfig:
 
 # Chat template
 def _normalize_role(role: Any) -> Optional[str]:
+    """다양한 role 표기를 표준 role(system/user/assistant)로 정규화한다."""
     if not isinstance(role, str):
         return None
     r = role.strip().lower()
@@ -211,6 +213,7 @@ def _extract_messages(
     messages_key: str,
     conversations_key: str,
 ) -> Optional[List[Dict[str, str]]]:
+    """예제에서 메시지 배열을 추출해 표준 대화 포맷으로 변환한다."""
     # case 1) standard chat format: {"messages":[{"role":"...","content":"..."}]}
     msgs = example.get(messages_key)
 
@@ -249,6 +252,7 @@ def build_training_example(
     messages_key: str,
     conversations_key: str,
 ):
+    """원본 예제를 TRL SFTTrainer가 기대하는 `messages` 구조로 변환한다."""
     messages = _extract_messages(
         example=example,
         messages_key=messages_key,
@@ -261,10 +265,12 @@ def build_training_example(
 
 
 def is_valid_training_example(example: Dict[str, Any]) -> bool:
+    """학습 가능한 예제인지 판정한다."""
     return is_conversational_example(example)
 
 
 def is_conversational_example(example: Dict[str, Any]) -> bool:
+    """`messages`가 대화형 샘플 구조를 만족하는지 검사한다."""
     msgs = example.get("messages")
     if not isinstance(msgs, list) or not msgs:
         return False
@@ -318,6 +324,7 @@ def debug_print_label_mask(trainer: SFTTrainer, tokenizer, max_rows: int = 220) 
 
 # Main
 def main():
+    """QLoRA 기반 SFT 학습 엔트리포인트."""
     parser = argparse.ArgumentParser()
 
     parser.add_argument(

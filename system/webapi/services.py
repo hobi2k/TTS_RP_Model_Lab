@@ -21,6 +21,10 @@ class RuntimeServices:
     """
 
     def __init__(self) -> None:
+        """서비스 컨테이너를 초기화한다.
+
+        실제 모델 로딩은 `_ensure_*` 메서드에서 지연(lazy) 수행된다.
+        """
         self._load_lock = Lock()
         self._turn_lock = Lock()
         self._parser = RPParser()
@@ -43,6 +47,7 @@ class RuntimeServices:
         )
 
     def _ensure_llm(self):
+        """LLM 엔진 인스턴스를 필요 시 생성하고 반환한다."""
         if self._llm is not None:
             return self._llm
         with self._load_lock:
@@ -65,6 +70,7 @@ class RuntimeServices:
         return self._llm
 
     def _ensure_translator(self):
+        """번역기 인스턴스를 필요 시 생성하고 반환한다."""
         if self._translator is not None:
             return self._translator
         with self._load_lock:
@@ -77,6 +83,7 @@ class RuntimeServices:
         return self._translator
 
     def _ensure_tts(self):
+        """SBV2 워커 클라이언트를 필요 시 생성하고 반환한다."""
         if self._tts is not None:
             return self._tts
         with self._load_lock:
@@ -87,6 +94,7 @@ class RuntimeServices:
         return self._tts
 
     def _ensure_mainloop_components(self):
+        """main_loop 파이프라인의 부가 컴포넌트를 초기화한다."""
         if self._prompt_compiler is None:
             profile = CharacterProfile(
                 name="사야",
@@ -102,6 +110,10 @@ class RuntimeServices:
             )
 
     def _infer_emotion_keyword(self, user_text: str, narration: str, dialogue_ko: str) -> dict[str, int]:
+        """키워드 기반 감정 one-hot을 추정한다.
+
+        LLM 감정 분류(JSON)가 실패했을 때 사용할 폴백 로직이다.
+        """
         text = f"{user_text} {narration} {dialogue_ko}".strip()
         if not text:
             return {"neutral": 1, "sad": 0, "happy": 0, "angry": 0}
@@ -124,12 +136,14 @@ class RuntimeServices:
 
     @staticmethod
     def _normalize_single_line_dialogue(text: str) -> str:
+        """멀티라인 대사를 번역기 입력 규칙(한 줄)으로 정규화한다."""
         if not text:
             return ""
         # 번역기 입력 정책(한 줄)과 맞추기 위해 줄바꿈을 공백으로 접는다.
         return " ".join(line.strip() for line in text.splitlines() if line.strip()).strip()
 
     def chat(self, text: str, max_new_tokens: int, temperature: float, top_p: float, top_k: int) -> str:
+        """LLM RP 원문을 생성하고 history/memory 상태를 갱신한다."""
         # main_loop와 동일한 prompt/history/memory 경로를 사용한다.
         with self._turn_lock:
             llm = self._ensure_llm()
@@ -174,6 +188,7 @@ class RuntimeServices:
             return raw_text
 
     def translate(self, text_ko: str, max_new_tokens: int, temperature: float, top_p: float) -> str:
+        """한 줄 한국어 대사를 일본어로 번역한다."""
         translator = self._ensure_translator()
         return translator.translate(
             text_ko,
@@ -183,9 +198,11 @@ class RuntimeServices:
         )
 
     def parse(self, text: str):
+        """RP 원문 텍스트를 구조화 블록으로 파싱한다."""
         return self._parser.parse(text)
 
     def tts(self, text_ja: str, style_index: int, style_weight: float, speaker_name: str = "saya") -> str:
+        """일본어 텍스트를 SBV2 워커로 합성한다."""
         client = self._ensure_tts()
         return client.speak(
             text_ja,
@@ -195,6 +212,16 @@ class RuntimeServices:
         )
 
     def turn(self, text_ko: str, style_index: int, style_weight: float, speaker_name: str = "saya"):
+        """메인 턴 파이프라인을 직렬 실행한다.
+
+        순서:
+        1) LLM RP 생성
+        2) RP 파싱
+        3) 한국어 대사 추출/정규화
+        4) 일본어 번역
+        5) TTS 합성
+        6) 감정 추정 + history/memory 저장
+        """
         # main_loop.py 흐름과 동일하게 상태(history/memory)를 직렬 처리
         with self._turn_lock:
             llm = self._ensure_llm()

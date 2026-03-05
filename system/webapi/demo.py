@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+"""Gradio 데모 UI 구성 모듈.
+
+역할:
+- `/api/main-loop`를 호출해 대화 턴을 진행한다.
+- 감정 결과에 따라 캐릭터 표정을 바꿔 stage HTML을 렌더링한다.
+- 디버그 패널에서 RP/번역/TTS 경로를 실시간 확인한다.
+"""
+
 import base64
 import html
 import time
@@ -207,6 +215,7 @@ CSS = """
 
 
 def _render_dialog_inner(record: dict[str, Any] | str | None) -> str:
+    """대화 패널 내부 HTML(화자 태그/서술/대사)을 구성한다."""
     if not record:
         return '<div class="speaker-tag">SAYA</div><div class="vn-line">...</div>'
 
@@ -224,6 +233,7 @@ def _render_dialog_inner(record: dict[str, Any] | str | None) -> str:
 
 
 def _render_stage(record: dict[str, Any] | None, bg_b64: str, char_b64: str) -> str:
+    """배경+캐릭터+대사 패널을 포함한 stage HTML 전체를 렌더링한다."""
     dialog = _render_dialog_inner(record)
     return (
         '<div style="position:relative;border:1px solid rgba(255,255,255,0.16);'
@@ -254,6 +264,7 @@ def _render_stage(record: dict[str, Any] | None, bg_b64: str, char_b64: str) -> 
 
 
 def _normalize_emotion(raw: Any) -> dict[str, int]:
+    """감정 JSON을 one-hot 규칙으로 정규화한다."""
     out = {"neutral": 1, "sad": 0, "happy": 0, "angry": 0}
     if not isinstance(raw, dict):
         return out
@@ -274,6 +285,7 @@ def _normalize_emotion(raw: Any) -> dict[str, int]:
 
 
 def _pick_char_b64(emotion: dict[str, int], char_b64_map: dict[str, str]) -> str:
+    """감정 상태에 대응하는 캐릭터 이미지(base64)를 선택한다."""
     if emotion.get("angry", 0) == 1:
         return char_b64_map["angry"]
     if emotion.get("sad", 0) == 1:
@@ -284,6 +296,7 @@ def _pick_char_b64(emotion: dict[str, int], char_b64_map: dict[str, str]) -> str
 
 
 def _render_history(history: list[dict[str, Any]]) -> str:
+    """최근 히스토리를 사람이 읽기 쉬운 텍스트로 변환한다."""
     if not history:
         return "no turns yet"
     lines = []
@@ -295,6 +308,14 @@ def _render_history(history: list[dict[str, Any]]) -> str:
 
 
 def build_demo(base_url: str) -> gr.Blocks:
+    """Gradio Blocks 데모를 생성한다.
+
+    Args:
+        base_url: REST API 서버 주소. 예) ``http://127.0.0.1:8000``.
+
+    Returns:
+        gr.Blocks: FastAPI에 mount 가능한 Gradio 앱.
+    """
     asset_neutral = Path(__file__).resolve().parent / "assets" / "neutral_full.png"
     asset_sad = Path(__file__).resolve().parent / "assets" / "crying_full.png"
     asset_happy = Path(__file__).resolve().parent / "assets" / "smile_full.png"
@@ -324,6 +345,7 @@ def build_demo(base_url: str) -> gr.Blocks:
     )
 
     def _error_frame(message: str, history: list[dict[str, Any]]):
+        """API 예외 발생 시 stage/디버그 출력을 에러 상태로 갱신한다."""
         rec_err = {
             "user": "",
             "narration": "시스템 오류가 발생했다.",
@@ -345,6 +367,7 @@ def build_demo(base_url: str) -> gr.Blocks:
         )
 
     def mainloop_turn(user_text: str, speaker_name: str, history: list[dict[str, Any]]):
+        """한 턴을 실행해 stage 프레임(typing effect 포함)을 순차 반환한다."""
         payload = {"text_ko": user_text, "speaker_name": (speaker_name or "saya")}
         try:
             with httpx.Client(timeout=240.0) as client:
@@ -428,6 +451,7 @@ def build_demo(base_url: str) -> gr.Blocks:
         )
 
     def reset_scene():
+        """씬/히스토리/디버그 상태를 초기화한다."""
         return (
             _render_stage(None, bg_b64=bg_b64, char_b64=char_b64_map["neutral"]),
             gr.skip(),
@@ -442,18 +466,21 @@ def build_demo(base_url: str) -> gr.Blocks:
         )
 
     def chat_api(user_text: str) -> str:
+        """`/api/chat` 단일 테스트 호출."""
         with httpx.Client(timeout=120.0) as client:
             res = client.post(f"{base_url}/api/chat", json={"text": user_text})
             res.raise_for_status()
             return res.json()["response"]
 
     def trans_api(text_ko: str) -> str:
+        """`/api/translate` 단일 테스트 호출."""
         with httpx.Client(timeout=120.0) as client:
             res = client.post(f"{base_url}/api/translate", json={"text_ko": text_ko})
             res.raise_for_status()
             return res.json()["text_ja"]
 
     def tts_api(text_ja: str, speaker_name: str):
+        """`/api/tts` 단일 테스트 호출."""
         with httpx.Client(timeout=120.0) as client:
             res = client.post(
                 f"{base_url}/api/tts",

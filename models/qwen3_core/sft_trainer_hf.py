@@ -66,6 +66,7 @@ from transformers import (
 
 
 def build_instruction_prompt(instruction: str, user_input: str) -> str:
+    """instruction/input 형식의 텍스트 프롬프트를 생성한다."""
     instruction = (instruction or "").strip()
     user_input = (user_input or "").strip()
 
@@ -86,6 +87,7 @@ def build_instruction_prompt(instruction: str, user_input: str) -> str:
 
 
 def build_lora_config(r: int, alpha: int, dropout: float) -> LoraConfig:
+    """Qwen 계열 모듈에 맞는 LoRA 설정을 구성한다."""
     return LoraConfig(
         r=r,
         lora_alpha=alpha,
@@ -105,6 +107,7 @@ def build_lora_config(r: int, alpha: int, dropout: float) -> LoraConfig:
 
 
 def _normalize_role(role: Any) -> Optional[str]:
+    """다양한 role 표기를 표준 role(system/user/assistant)로 정규화한다."""
     if not isinstance(role, str):
         return None
 
@@ -122,6 +125,10 @@ def _normalize_role(role: Any) -> Optional[str]:
 
 
 def _stringify_content(content: Any) -> str:
+    """메시지 content를 문자열로 변환한다.
+
+    OpenAI 멀티파트 형식(list[{"type":"text","text":"..."}])도 처리한다.
+    """
     if isinstance(content, str):
         return content.strip()
 
@@ -142,6 +149,7 @@ def extract_messages(
     messages_key: str,
     conversations_key: str,
 ) -> Optional[List[Dict[str, str]]]:
+    """예제에서 대화 메시지 리스트를 추출해 표준 포맷으로 변환한다."""
     msgs = example.get(messages_key)
     if msgs is None:
         msgs = example.get(conversations_key)
@@ -168,12 +176,14 @@ def extract_messages(
 
 
 def is_valid_conversation(messages: Optional[List[Dict[str, str]]]) -> bool:
+    """유효한 대화 예제인지 판정한다(assistant 턴 존재 필수)."""
     if not messages:
         return False
     return any(msg["role"] == "assistant" for msg in messages)
 
 
 def extract_instruction_example(example: Dict[str, Any]) -> Optional[Dict[str, str]]:
+    """instruction/input/output 단일 예제를 추출한다."""
     instruction = example.get("instruction")
     user_input = example.get("input", "")
     output = example.get("output")
@@ -198,6 +208,7 @@ def tokenize_messages(
     max_length: int,
     assistant_only_loss: bool,
 ) -> Dict[str, List[int]]:
+    """대화 메시지를 토크나이즈하고 학습 라벨을 구성한다."""
     assistant_indices = [idx for idx, msg in enumerate(messages) if msg["role"] == "assistant"]
     if not assistant_indices:
         return {"input_ids": [], "attention_mask": [], "labels": []}
@@ -251,6 +262,7 @@ def tokenize_instruction_example(
     max_length: int,
     assistant_only_loss: bool,
 ) -> Dict[str, List[int]]:
+    """instruction 형식 예제를 토크나이즈하고 학습 라벨을 구성한다."""
     prompt_text = build_instruction_prompt(
         instruction_example["instruction"],
         instruction_example["input"],
@@ -297,6 +309,7 @@ def preprocess_example(
     conversations_key: str,
     assistant_only_loss: bool,
 ) -> Dict[str, Any]:
+    """예제를 대화형/지시형으로 분기해 공통 학습 포맷으로 변환한다."""
     messages = extract_messages(
         example=example,
         messages_key=messages_key,
@@ -322,10 +335,12 @@ def preprocess_example(
 
 
 def has_tokens(example: Dict[str, Any]) -> bool:
+    """비어 있지 않은 토큰 시퀀스인지 확인한다."""
     return bool(example["input_ids"])
 
 
 def print_trainable_params(model: torch.nn.Module) -> None:
+    """모델 전체 파라미터 대비 학습 가능 파라미터 비율을 출력한다."""
     trainable = 0
     total = 0
     for _, param in model.named_parameters():
@@ -341,9 +356,12 @@ def print_trainable_params(model: torch.nn.Module) -> None:
 
 @dataclass
 class DataCollatorForCausalLM:
+    """가변 길이 causal LM 배치를 padding해 텐서로 묶는 collator."""
+
     tokenizer: Any
 
     def __call__(self, features: List[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
+        """input_ids/attention_mask/labels를 길이에 맞춰 패딩한다."""
         labels = [feature["labels"] for feature in features]
         model_inputs = [
             {
@@ -370,6 +388,7 @@ class DataCollatorForCausalLM:
 
 
 def main() -> None:
+    """QLoRA SFT 학습 엔트리포인트."""
     parser = argparse.ArgumentParser()
 
     parser.add_argument(

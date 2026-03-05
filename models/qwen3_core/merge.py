@@ -49,6 +49,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
 def _resolve_dtype(dtype_name: str) -> torch.dtype:
+    """문자열 dtype 인자를 torch dtype으로 변환한다."""
     table = {
         "auto": torch.float32,
         "float32": torch.float32,
@@ -65,6 +66,7 @@ def _resolve_dtype(dtype_name: str) -> torch.dtype:
 
 
 def parse_args() -> argparse.Namespace:
+    """LoRA 병합 CLI 인자를 파싱한다."""
     parser = argparse.ArgumentParser(
         description="Merge base instruct model + LoRA adapter into a standalone model."
     )
@@ -115,6 +117,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    """Base 모델과 LoRA adapter를 병합해 단일 모델로 저장한다."""
     args = parse_args()
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)

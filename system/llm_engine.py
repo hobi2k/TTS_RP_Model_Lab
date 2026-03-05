@@ -24,7 +24,7 @@ from vllm import LLM, SamplingParams
 
 @dataclass
 class GenerationConfig:
-    """생성 파라미터 설정값."""
+    """텍스트 생성 샘플링 파라미터 묶음."""
 
     max_new_tokens: int = 180
     temperature: float = 0.7
@@ -47,6 +47,13 @@ class QwenEngine:
         device_map: str = "auto",
         default_gen: Optional[GenerationConfig] = None,
     ) -> None:
+        """LLM 엔진을 초기화한다.
+
+        초기화 순서:
+        1) 토크나이저 준비
+        2) 환경변수 정책에 따라 vLLM 시도
+        3) 실패 시 transformers + bitsandbytes(4bit) 폴백
+        """
         self.default_gen = default_gen or GenerationConfig()
         project_root = Path(__file__).resolve().parents[1]
         self.resolved_base_model_id = str(
@@ -89,6 +96,11 @@ class QwenEngine:
         self.backend = "hf"
 
     def _init_vllm(self) -> None:
+        """vLLM 백엔드를 초기화한다.
+
+        메모리 OOM을 줄이기 위해 `max_model_len`, `max_num_seqs`의
+        보수적 기본값을 사용한다.
+        """
 
         gpu_mem_util = float(os.getenv("VLLM_GPU_MEMORY_UTILIZATION", "0.85"))
         max_model_len_env = os.getenv("VLLM_MAX_MODEL_LEN")
@@ -125,6 +137,7 @@ class QwenEngine:
         device_map: str,
         lora_model_id: Optional[str],
     ) -> None:
+        """transformers + bitsandbytes 4bit 경로를 초기화한다."""
         # fallback은 bitsandbytes 4bit를 기본으로 사용
         quant_cfg = BitsAndBytesConfig(
             load_in_4bit=True,
@@ -165,6 +178,7 @@ class QwenEngine:
 
     @staticmethod
     def _normalize_emotion(raw: dict | None) -> dict[str, int]:
+        """임의 JSON을 감정 one-hot 형태로 정규화한다."""
         out = {"neutral": 1, "sad": 0, "happy": 0, "angry": 0}
         if not isinstance(raw, dict):
             return out
@@ -187,6 +201,11 @@ class QwenEngine:
         return {"neutral": 1, "sad": 0, "happy": 0, "angry": 0}
 
     def infer_emotion_json(self, narration: str, dialogue_ko: str) -> dict[str, int] | None:
+        """서술/대사를 기반으로 감정 JSON(one-hot)을 추론한다.
+
+        Returns:
+            dict[str, int] | None: 파싱 성공 시 one-hot 감정, 실패 시 None.
+        """
         text = f"{narration}\n{dialogue_ko}".strip()
         if not text:
             return {"neutral": 1, "sad": 0, "happy": 0, "angry": 0}
@@ -229,6 +248,7 @@ class QwenEngine:
 
     @torch.no_grad()
     def _generate_hf(self, prompt: str, cfg: GenerationConfig) -> str:
+        """transformers backend로 assistant 응답 텍스트를 생성한다."""
         inputs = self.tokenizer(
             prompt,
             return_tensors="pt",
@@ -258,6 +278,7 @@ class QwenEngine:
         return self.tokenizer.decode(gen_ids, skip_special_tokens=True).strip()
 
     def _generate_vllm(self, prompt: str, cfg: GenerationConfig) -> str:
+        """vLLM backend로 assistant 응답 텍스트를 생성한다."""
 
         sampling_params = SamplingParams(
             max_tokens=cfg.max_new_tokens,

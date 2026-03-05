@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Qwen RP용 GRPO 학습 스크립트.
 
 설계 목표:
@@ -102,6 +100,8 @@ uv run models/qwen3_core/grpo_trainer.py \
   --debug_log_every_calls 5 \
   --debug_log_num_samples 2
 """
+
+from __future__ import annotations
 
 import argparse
 import re

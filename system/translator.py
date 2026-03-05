@@ -9,7 +9,12 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 
 
 class KoJaTranslator:
-    """대사 전용 한국어-일본어 번역기."""
+    """대사 전용 한국어-일본어 번역기.
+
+    주의:
+    - 입력은 "한 줄 대사"를 전제로 한다.
+    - 모델은 머지된 로컬 체크포인트를 기본 경로에서 로드한다.
+    """
 
     DEFAULT_INSTRUCTION = "다음 한국어 문장을 자연스러운 일본어로 번역하시오."
 
@@ -19,6 +24,13 @@ class KoJaTranslator:
         device: str | None = None,
         instruction: str | None = None,
     ) -> None:
+        """번역기 인스턴스를 구성한다.
+
+        Args:
+            model_dir: 번역 모델 디렉터리. None이면 프로젝트 기본 경로를 사용한다.
+            device: 실행 디바이스 문자열. None이면 CUDA 가능 여부로 자동 선택한다.
+            instruction: 프롬프트 지시문 오버라이드.
+        """
         project_root = Path(__file__).resolve().parents[1]
         self.model_dir = str(
             Path(model_dir)
@@ -47,6 +59,7 @@ class KoJaTranslator:
         self.model.eval()
 
     def _build_prompt(self, text_ko: str) -> str:
+        """SFT 포맷에 맞는 번역 프롬프트 문자열을 생성한다."""
         return (
             "### 지시문:\n"
             f"{self.instruction}\n\n"
@@ -64,7 +77,17 @@ class KoJaTranslator:
         temperature: float = 0.2,
         top_p: float = 0.9,
     ) -> str:
-        """한 줄 한국어 대사를 일본어로 번역한다."""
+        """한 줄 한국어 대사를 일본어로 번역한다.
+
+        Args:
+            dialogue_ko: 한국어 대사 한 줄.
+            max_new_tokens: 생성 최대 길이.
+            temperature: 샘플링 온도.
+            top_p: nucleus sampling 비율.
+
+        Returns:
+            str: 일본어 번역 결과(트리밍 완료 문자열).
+        """
 
         if not dialogue_ko:
             return ""

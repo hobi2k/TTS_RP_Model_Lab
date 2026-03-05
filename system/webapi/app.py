@@ -1,7 +1,16 @@
 from __future__ import annotations
+
+"""FastAPI 애플리케이션 진입점.
+
+실행 예:
+    uv run uvicorn system.webapi.app:app --host 0.0.0.0 --port 8000
+
+구성:
+- REST 엔드포인트(`/api/chat`, `/api/turn` 등)
+- 런타임 서비스 컨테이너(`RuntimeServices`) 연결
+- 선택적 Gradio 데모(`/demo`) 마운트
 """
-uv run uvicorn system.webapi.app:app --host 0.0.0.0 --port 8000
-"""
+
 import os
 
 from fastapi import FastAPI, HTTPException
@@ -41,11 +50,13 @@ app.add_middleware(
 
 @app.get("/health")
 def health():
+    """헬스체크 엔드포인트."""
     return {"status": "ok"}
 
 
 @app.get("/")
 def root():
+    """루트 접속 시 데모 또는 OpenAPI 문서로 리다이렉트한다."""
     if os.getenv("WEBAPI_ENABLE_GRADIO", "1") == "1":
         return RedirectResponse(url="/demo")
     return RedirectResponse(url="/docs")
@@ -53,6 +64,11 @@ def root():
 
 @app.post("/api/chat", response_model=ChatResponse)
 def chat(req: ChatRequest):
+    """LLM 단일 응답을 생성한다.
+
+    이 엔드포인트는 파싱/번역/TTS를 수행하지 않고,
+    RP 원문 텍스트만 반환한다.
+    """
     try:
         text = services.chat(
             req.text,
@@ -68,6 +84,7 @@ def chat(req: ChatRequest):
 
 @app.post("/api/translate", response_model=TranslateResponse)
 def translate(req: TranslateRequest):
+    """한국어 대사 한 줄을 일본어로 번역한다."""
     try:
         text_ja = services.translate(
             req.text_ko,
@@ -82,6 +99,7 @@ def translate(req: TranslateRequest):
 
 @app.post("/api/parse", response_model=ParseResponse)
 def parse(req: ParseRequest):
+    """RP 원문을 서술/대사 구조로 분해한다."""
     try:
         block = services.parse(req.text)
         return ParseResponse(
@@ -95,6 +113,7 @@ def parse(req: ParseRequest):
 
 @app.post("/api/tts", response_model=TTSResponse)
 def tts(req: TTSRequest):
+    """일본어 텍스트를 TTS로 합성하고 WAV 경로를 반환한다."""
     try:
         wav_path = services.tts(
             req.text_ja,
@@ -109,6 +128,7 @@ def tts(req: TTSRequest):
 
 @app.post("/api/turn", response_model=TurnResponse)
 def turn(req: TurnRequest):
+    """메인 턴 파이프라인(LLM -> parse -> translate -> TTS)을 실행한다."""
     try:
         result = services.turn(
             req.text_ko,
@@ -123,6 +143,7 @@ def turn(req: TurnRequest):
 
 @app.post("/api/main-loop", response_model=TurnResponse)
 def main_loop(req: TurnRequest):
+    """`/api/turn`과 동일한 파이프라인을 데모 호환 이름으로 노출한다."""
     try:
         result = services.turn(
             req.text_ko,
