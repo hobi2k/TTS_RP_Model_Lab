@@ -6,6 +6,7 @@ import subprocess
 import os
 from collections import deque
 
+from system.langgraph_pipeline import build_turn_graph
 from system.llm_engine import QwenEngine, GenerationConfig
 from system.memory_chain import SummaryMemoryChain, SummaryMemoryConfig
 from system.prompt_compiler import PromptCompiler, CharacterProfile
@@ -26,7 +27,7 @@ class MainLoop:
         self.llm_engine = QwenEngine(
             default_gen=GenerationConfig(
                 max_new_tokens=200,
-                temperature=0.7,
+                temperature=0.75,
                 top_p=0.85,
                 top_k=50,
                 repetition_penalty=1.1,
@@ -43,6 +44,8 @@ class MainLoop:
         self.translator = KoJaTranslator()
         self.tts_client = SBV2WorkerClient()
         self.speaker_name = os.getenv("TTS_SPEAKER_NAME", "saya").strip().lower()
+        self.style_index = int(os.getenv("TTS_STYLE_INDEX", "0"))
+        self.style_weight = float(os.getenv("TTS_STYLE_WEIGHT", "1.0"))
 
         # 대화 이력 저장
         # user+assistant 2개 메시지가 1턴이므로 3턴 유지=6개 메시지
@@ -50,56 +53,78 @@ class MainLoop:
         # role: "user" / "assistant"
         # content: LLM 원문 출력
 
+        self.turn_graph = build_turn_graph(
+            llm_engine=self.llm_engine,
+            rp_parser=self.rp_parser,
+            translator=self.translator,
+            tts_synth=lambda text_ja, style_index, style_weight, speaker_name: self.tts_client.speak(
+                text_ja,
+                style_index=style_index,
+                style_weight=style_weight,
+                speaker_name=speaker_name,
+            ),
+            prompt_compiler=self.prompt_compiler,
+            memory_chain=self.memory_chain,
+            history=self.history,
+            normalize_dialogue=self._normalize_single_line_dialogue,
+            infer_emotion_fallback=self._infer_emotion_keyword,
+        )
+
     @staticmethod
     def _normalize_single_line_dialogue(text: str) -> str:
         if not text:
             return ""
         return " ".join(line.strip() for line in text.splitlines() if line.strip()).strip()
 
+    @staticmethod
+    def _infer_emotion_keyword(user_text: str, narration: str, dialogue_ko: str) -> dict[str, int]:
+        """키워드 기반 감정 one-hot 폴백."""
+        text = f"{user_text} {narration} {dialogue_ko}".strip()
+        if not text:
+            return {"neutral": 1, "sad": 0, "happy": 0, "angry": 0}
+
+        sad_kw = ("슬퍼", "울", "눈물", "외로", "힘들", "아파", "불안", "우울", "미안", "실망", "기대했")
+        happy_kw = ("좋아", "행복", "웃", "기뻐", "반가", "신나", "즐거", "설레")
+        angry_kw = ("화나", "짜증", "분노", "빡", "싫어", "미워", "그만", "닥쳐", "거짓말")
+
+        score_sad = sum(1 for k in sad_kw if k in text)
+        score_happy = sum(1 for k in happy_kw if k in text)
+        score_angry = sum(1 for k in angry_kw if k in text)
+
+        if score_angry > 0 and score_angry >= max(score_sad, score_happy):
+            return {"neutral": 0, "sad": 0, "happy": 0, "angry": 1}
+        if score_sad > 0 and score_sad >= score_happy:
+            return {"neutral": 0, "sad": 1, "happy": 0, "angry": 0}
+        if score_happy > 0:
+            return {"neutral": 0, "sad": 0, "happy": 1, "angry": 0}
+        return {"neutral": 1, "sad": 0, "happy": 0, "angry": 0}
+
     def step(self, user_text: str) -> None:
-        # 1) 시스템 프롬프트 구성
-        system_msgs = self.prompt_compiler.compile()
-
-        # 2) 메시지 묶기
-        messages: list[dict] = []
-        messages.extend(system_msgs)
-        memory_msg = self.memory_chain.build_memory_system_message(current_user_text=user_text)
-        if memory_msg is not None:
-            messages.append(memory_msg)
-        messages.extend(self.history)
-        messages.append({"role": "user", "content": user_text})
-
-        # 3) 프롬프트 생성 및 응답 생성
-        prompt = self.llm_engine.build_prompt(messages)
-        raw_text = self.llm_engine.generate(prompt)
-
-        # 4) RP 블록 파싱
-        rp = self.rp_parser.parse(raw_text)
+        result = self.turn_graph.invoke(
+            {
+                "text_ko": user_text,
+                "style_index": self.style_index,
+                "style_weight": self.style_weight,
+                "speaker_name": self.speaker_name,
+            }
+        )
 
         # UI 출력: 서술 + 대사 2줄 형식
-        if rp.narration:
-            print(rp.narration)
+        narration = result.get("narration", "")
+        dialogue_ko = result.get("dialogue_ko", "")
+        emotion = result.get("emotion") or {"neutral": 1, "sad": 0, "happy": 0, "angry": 0}
+        wav_path = result.get("wav_path")
 
-        dialogue_ko = self._normalize_single_line_dialogue(rp.dialogue_en or "")
+        if narration:
+            print(narration)
+
         if dialogue_ko:
             print(f"\"{dialogue_ko}\"")
 
-        # 공용 LLM 감정 판정(JSON one-hot)
-        emotion = self.llm_engine.infer_emotion_json(rp.narration, dialogue_ko)
-        if emotion is None:
-            emotion = {"neutral": 1, "sad": 0, "happy": 0, "angry": 0}
         print(f"[emotion] {emotion}")
 
-        # 대사 번역 및 TTS
-        if dialogue_ko:
+        if wav_path:
             try:
-                dialogue_ja = self.translator.translate(dialogue_ko)
-
-                wav_path = self.tts_client.speak(
-                    dialogue_ja,
-                    speaker_name=self.speaker_name,
-                )
-
                 subprocess.run(
                     ["ffplay", "-nodisp", "-autoexit", str(wav_path)],
                     stdout=subprocess.DEVNULL,
@@ -107,16 +132,6 @@ class MainLoop:
                 )
             except Exception as e:
                 print(f"[TTS ERROR] {e}")
-
-        # 이력 업데이트
-        self.history.append({"role": "user", "content": user_text})
-        self.history.append({"role": "assistant", "content": raw_text})
-
-        # 요약 메모리 업데이트
-        mem_assistant_text = "\n".join(
-            p for p in [rp.narration.strip(), dialogue_ko] if p
-        ).strip() or raw_text
-        self.memory_chain.update(user_text=user_text, assistant_text=mem_assistant_text)
 
 
 if __name__ == "__main__":

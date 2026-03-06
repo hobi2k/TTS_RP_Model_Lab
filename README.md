@@ -56,9 +56,19 @@ uv sync
 ### 0-3. 런타임 기본 모델/환경변수
 
 현재 코드 기준 기본 경로:
-- LLM: `models/qwen3_core/model_assets/saya_rp_7b_v2`
-- 번역기: `models/qwen3_core/model_assets/qtranslator_1.7b`
+- LLM: `models/qwen3_core/model_assets/saya_rp_4b_v3`
+- 번역기: `models/qwen3_core/model_assets/qtranslator_1.7b_v2`
 - TTS 워커: `models/Style-BERT-VITS2/sbv2_worker.py`
+
+루트 초기화 스크립트로 4B 모델 자산 다운로드:
+```bash
+uv run initialize.py --only runtime_llm_4b_v3
+uv run initialize.py --only runtime_llm_4b_v3_sft
+```
+
+두 모델은 각각 아래 경로로 저장됩니다.
+- `models/qwen3_core/model_assets/saya_rp_4b_v3`
+- `models/qwen3_core/model_assets/saya_rp_4b_v3_sft`
 
 오버라이드 환경변수:
 - `QWEN_MODEL_DIR`: LLM 모델 경로
@@ -510,12 +520,6 @@ REST 엔드포인트(현재):
 
 ## 6) 자주 발생하는 문제와 원인
 
-## 6-0. TTS 성능 한계(중요)
-
-현재 구성은 `litagin02/Style-Bert-VITS2` 파이프라인을 기반으로 하지만,
-litagin 쪽 pretrained를 그대로 사용하는 방식이 아니기 때문에
-동일한 성능(음질/안정성/표현력)이 그대로 나오지 않을 수 있습니다.
-
 ## 6-1. `model_fp16.onnx` 로드 실패
 에러 예시:
 - `Type Error: Type (tensor(float16)) of output arg (...) does not match expected type (tensor(float))`
@@ -580,15 +584,6 @@ litagin 쪽 pretrained를 그대로 사용하는 방식이 아니기 때문에
 - 현재 `models/qwen3_core/grpo_trainer.py`는 지원 인자만 자동 주입하도록 호환 처리되어 있습니다.
 - 미지원 인자는 경고 로그 후 자동 제외됩니다.
 
-## 6-7. `PYTORCH_CUDA_ALLOC_CONF` deprecate 경고
-경고 예시:
-- `PYTORCH_CUDA_ALLOC_CONF is deprecated, use PYTORCH_ALLOC_CONF instead`
-
-대응:
-- 다음처럼 최신 환경 변수를 사용하세요.
-```bash
-PYTORCH_ALLOC_CONF=expandable_segments:True uv run ...
-```
 
 ## 7) 권장 운영 순서
 

@@ -23,7 +23,6 @@ uv run data/v5_gpt_multiturn_gen.py \
 - 플레이어는 시나리오북에서 추출한 "플레이어 이름"을 사용한다.
 - 주인공은 시나리오북에서 추출한 "주인공 이름"을 사용한다.
 - 출력에 별표(*)/장식문자/괄호()/메타(FSM, system 등) 언급을 강하게 차단한다.
-- EmbeddingMemory.is_repetitive()는 keyword-only이므로 절대 positional로 넘기지 않는다..
 """
 
 from __future__ import annotations

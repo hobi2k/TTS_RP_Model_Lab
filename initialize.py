@@ -6,7 +6,8 @@
 
 사용 예시:
   uv run initialize.py
-  uv run initialize.py --only runtime_llm_v3
+  uv run initialize.py --only runtime_llm_4b_v3
+  uv run initialize.py --only runtime_llm_4b_v3_sft
   uv run initialize.py --only tts_saya_v2
   uv run initialize.py --force
 """
@@ -87,6 +88,18 @@ SPECS: dict[str, ModelSpec] = {
         local_dir=QWEN_ASSETS_DIR / "saya_rp_4b_v2",
         description="현재 4B RP 런타임 모델",
     ),
+    "runtime_llm_4b_v3": ModelSpec(
+        key="runtime_llm_4b_v3",
+        repo_id="ahnhs2k/saya_rp_4b_v3",
+        local_dir=QWEN_ASSETS_DIR / "saya_rp_4b_v3",
+        description="현재 4B RP 런타임 모델(v3)",
+    ),
+    "runtime_llm_4b_v3_sft": ModelSpec(
+        key="runtime_llm_4b_v3_sft",
+        repo_id="ahnhs2k/saya_rp_4b_v3_sft",
+        local_dir=QWEN_ASSETS_DIR / "saya_rp_4b_v3_sft",
+        description="4B RP SFT 체크포인트(v3)",
+    ),
     "runtime_translator_v2": ModelSpec(
         key="runtime_translator_v2",
         repo_id="ahnhs2k/qtranslator_1.7b_v2",
@@ -128,7 +141,8 @@ DEFAULT_TARGETS = [
     "bge_m3_ko",
     "base_llm_7b",
     "base_translator_1_7b",
-    "runtime_llm_v3",
+    "runtime_llm_4b_v3",
+    "runtime_llm_4b_v3_sft",
     "runtime_translator_v2",
     "tts_saya_v2",
     "tts_mai_v2",

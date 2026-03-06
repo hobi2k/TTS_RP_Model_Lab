@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from threading import Lock
+from threading import Lock, RLock
 from collections import deque
 
+from system.langgraph_pipeline import build_turn_graph
 from system.rp_parser import RPParser
 from system.prompt_compiler import PromptCompiler, CharacterProfile
 from system.memory_chain import SummaryMemoryChain, SummaryMemoryConfig
@@ -25,7 +26,7 @@ class RuntimeServices:
 
         실제 모델 로딩은 `_ensure_*` 메서드에서 지연(lazy) 수행된다.
         """
-        self._load_lock = Lock()
+        self._load_lock = RLock()
         self._turn_lock = Lock()
         self._parser = RPParser()
         # user+assistant 2개 메시지가 1턴이므로 3턴 유지=6개 메시지
@@ -33,6 +34,7 @@ class RuntimeServices:
         self._llm = None
         self._prompt_compiler = None
         self._memory_chain = None
+        self._turn_graph = None
         self._translator = None
         self._tts = None
 
@@ -106,6 +108,31 @@ class RuntimeServices:
                 self._ensure_llm(),
                 SummaryMemoryConfig(enabled=True, update_every_turns=1, max_summary_chars=900),
             )
+
+    def _ensure_turn_graph(self):
+        """LangGraph 기반 턴 파이프라인을 필요 시 생성하고 반환한다."""
+        if self._turn_graph is not None:
+            return self._turn_graph
+        with self._load_lock:
+            if self._turn_graph is None:
+                self._ensure_mainloop_components()
+                self._turn_graph = build_turn_graph(
+                    llm_engine=self._ensure_llm(),
+                    rp_parser=self._parser,
+                    translator=self._ensure_translator(),
+                    tts_synth=lambda text_ja, style_index, style_weight, speaker_name: self.tts(
+                        text_ja,
+                        style_index=style_index,
+                        style_weight=style_weight,
+                        speaker_name=speaker_name,
+                    ),
+                    prompt_compiler=self._prompt_compiler,
+                    memory_chain=self._memory_chain,
+                    history=self._history,
+                    normalize_dialogue=self._normalize_single_line_dialogue,
+                    infer_emotion_fallback=self._infer_emotion_keyword,
+                )
+        return self._turn_graph
 
     def _infer_emotion_keyword(self, user_text: str, narration: str, dialogue_ko: str) -> dict[str, int]:
         """키워드 기반 감정 one-hot을 추정한다.
@@ -210,7 +237,7 @@ class RuntimeServices:
         )
 
     def turn(self, text_ko: str, style_index: int, style_weight: float, speaker_name: str = "saya"):
-        """메인 턴 파이프라인을 직렬 실행한다.
+        """LangGraph 기반 메인 턴 파이프라인을 실행한다.
 
         순서:
         1) LLM RP 생성
@@ -220,58 +247,23 @@ class RuntimeServices:
         5) TTS 합성
         6) 감정 추정 + history/memory 저장
         """
-        # main_loop.py 흐름과 동일하게 상태(history/memory)를 직렬 처리
+        # history/memory 공유 상태를 직렬 처리한다.
         with self._turn_lock:
-            llm = self._ensure_llm()
-            self._ensure_mainloop_components()
-            parser = self._parser
-            translator = self._ensure_translator()
-
-            system_msgs = self._prompt_compiler.compile()
-            messages: list[dict] = []
-            messages.extend(system_msgs)
-
-            memory_msg = self._memory_chain.build_memory_system_message(current_user_text=text_ko)
-            if memory_msg is not None:
-                messages.append(memory_msg)
-
-            messages.extend(self._history)
-            messages.append({"role": "user", "content": text_ko})
-
-            prompt = llm.build_prompt(messages)
-            raw_text = llm.generate(prompt)
-
-            rp = parser.parse(raw_text)
-            dialogue_ko = self._normalize_single_line_dialogue(rp.dialogue_en or "")
-            dialogue_ja = ""
-            wav_path = None
-
-            if dialogue_ko:
-                dialogue_ja = translator.translate(dialogue_ko)
-                wav_path = self.tts(
-                    dialogue_ja,
-                    style_index=style_index,
-                    style_weight=style_weight,
-                    speaker_name=speaker_name,
-                )
-            emotion = llm.infer_emotion_json(rp.narration, dialogue_ko)
-            if emotion is None:
-                emotion = self._infer_emotion_keyword(text_ko, rp.narration, dialogue_ko)
-
-            # main_loop와 같은 history/memory 업데이트
-            self._history.append({"role": "user", "content": text_ko})
-            self._history.append({"role": "assistant", "content": raw_text})
-
-            mem_assistant_text = "\n".join(
-                p for p in [rp.narration.strip(), dialogue_ko] if p
-            ).strip() or raw_text
-            self._memory_chain.update(user_text=text_ko, assistant_text=mem_assistant_text)
+            graph = self._ensure_turn_graph()
+            result = graph.invoke(
+                {
+                    "text_ko": text_ko,
+                    "style_index": style_index,
+                    "style_weight": style_weight,
+                    "speaker_name": speaker_name,
+                }
+            )
 
             return {
-                "rp_text": raw_text,
-                "narration": rp.narration,
-                "dialogue_ko": dialogue_ko,
-                "dialogue_ja": dialogue_ja,
-                "wav_path": wav_path,
-                "emotion": emotion,
+                "rp_text": result.get("rp_text", ""),
+                "narration": result.get("narration", ""),
+                "dialogue_ko": result.get("dialogue_ko", ""),
+                "dialogue_ja": result.get("dialogue_ja", ""),
+                "wav_path": result.get("wav_path"),
+                "emotion": result.get("emotion") or {"neutral": 1, "sad": 0, "happy": 0, "angry": 0},
             }

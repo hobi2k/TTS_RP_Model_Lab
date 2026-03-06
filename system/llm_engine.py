@@ -27,7 +27,7 @@ class GenerationConfig:
     """텍스트 생성 샘플링 파라미터 묶음."""
 
     max_new_tokens: int = 180
-    temperature: float = 0.7
+    temperature: float = 0.75
     top_p: float = 0.95
     top_k: int = 50
     repetition_penalty: float = 1.12
