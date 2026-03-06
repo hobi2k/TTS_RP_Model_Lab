@@ -39,7 +39,7 @@ class RuntimeServices:
         project_root = Path(__file__).resolve().parents[2]
         self.qwen_model = os.getenv(
             "QWEN_MODEL_DIR",
-            str(project_root / "models" / "qwen3_core" / "model_assets" / "saya_rp_7b_v3"),
+            str(project_root / "models" / "qwen3_core" / "model_assets" / "saya_rp_4b_v3"),
         )
         self.trans_base = os.getenv(
             "TRANS_MODEL_DIR",
@@ -58,11 +58,11 @@ class RuntimeServices:
                     base_model_id=self.qwen_model,
                     default_gen=GenerationConfig(
                         max_new_tokens=200,
-                        temperature=0.7,
-                        top_p=0.95,
+                        temperature=0.75,
+                        top_p=0.85,
                         top_k=50,
-                        repetition_penalty=1.12,
-                        no_repeat_ngram_size=4,
+                        repetition_penalty=1.1,
+                        no_repeat_ngram_size=0,
                         do_sample=True,
                         use_cache=True,
                     ),
@@ -98,8 +98,6 @@ class RuntimeServices:
         if self._prompt_compiler is None:
             profile = CharacterProfile(
                 name="사야",
-                persona="조용하고 내향적이다. 부드러운 말투를 사용하며 일상적인 대화를 선호한다.",
-                speaking_style="짧고 자연스러운 문장으로 차분하게 말한다.",
             )
             self._prompt_compiler = PromptCompiler(profile)
 
@@ -168,8 +166,8 @@ class RuntimeServices:
                 temperature=temperature,
                 top_p=top_p,
                 top_k=top_k,
-                repetition_penalty=1.12,
-                no_repeat_ngram_size=4,
+                repetition_penalty=1.1,
+                no_repeat_ngram_size=0,
                 do_sample=True,
                 use_cache=True,
             )

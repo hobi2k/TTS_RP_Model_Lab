@@ -1,6 +1,6 @@
 """시스템 프롬프트 컴파일러.
 
-이 모듈은 캐릭터 프로필(이름/성격/말투)을 바탕으로
+이 모듈은 캐릭터 프로필(이름)을 바탕으로
 RP 모델에 주입할 system 메시지를 생성한다.
 
 `PromptCompiler.compile()`은 현재 코드베이스의 기본 세계관/출력 규칙을
@@ -15,8 +15,6 @@ class CharacterProfile:
     """시스템 프롬프트에 주입할 캐릭터 기초 정보."""
 
     name: str
-    persona: str
-    speaking_style: str
 
 
 class PromptCompiler:

@@ -19,10 +19,6 @@ class MainLoop:
         # 캐릭터 기본 설정
         profile = CharacterProfile(
             name="사야",
-            persona=(
-                "조용하고 내향적이다. 부드러운 말투를 사용하며 일상적인 대화를 선호한다."
-            ),
-            speaking_style="짧고 자연스러운 문장으로 차분하게 말한다.",
         )
 
         # 핵심 컴포넌트 초기화
@@ -31,10 +27,10 @@ class MainLoop:
             default_gen=GenerationConfig(
                 max_new_tokens=200,
                 temperature=0.7,
-                top_p=0.95,
-                top_k=40,
-                repetition_penalty=1.12,
-                no_repeat_ngram_size=4,
+                top_p=0.85,
+                top_k=50,
+                repetition_penalty=1.1,
+                no_repeat_ngram_size=0,
                 do_sample=True,
                 use_cache=True,
             )

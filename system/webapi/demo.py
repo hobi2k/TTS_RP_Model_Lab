@@ -569,6 +569,13 @@ def build_demo(base_url: str) -> gr.Blocks:
             outputs=[stage_html, audio_hidden, transcript, dbg_rp, dbg_narr, dbg_dko, dbg_dja, dbg_wav, history_state, user_input],
             show_progress="hidden",
         )
+        # Voice 드롭다운 변경 직후 Enter 전송이 끊기지 않도록 입력창 포커스를 복구한다.
+        speaker_name.change(
+            fn=None,
+            inputs=None,
+            outputs=None,
+            js="() => { const el = document.querySelector('#vn-user-input input, #vn-user-input textarea'); if (el) el.focus(); }",
+        )
         user_input.submit(
             mainloop_turn,
             inputs=[user_input, speaker_name, history_state],
