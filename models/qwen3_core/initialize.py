@@ -33,8 +33,10 @@ MODELS = {
     # "qwen3-1.7b-base": "Qwen/Qwen3-1.7B-Base",
     # "qwen3-4b-instruct": "Qwen/Qwen3-4B-Instruct-2507",
     # "qwen3-4b": "Qwen/Qwen3-4B-Instruct-2507",
-    "saya_rp_4b_v2": "ahnhs2k/saya_rp_4b_v2",
+    # "saya_rp_4b_v2": "ahnhs2k/saya_rp_4b_v2",
     # "YanoljaNEXT-EEVE-7B-v2": "yanolja/YanoljaNEXT-EEVE-Instruct-7B-v2-Preview",
+    # "rosetta_4b": "yanolja/YanoljaNEXT-Rosetta-4B",
+    "kanana_3b": "kakaocorp/kanana-1.5-v-3b-instruct"
 }
 
 

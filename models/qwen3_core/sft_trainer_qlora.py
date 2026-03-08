@@ -23,19 +23,18 @@ uv run models/qwen3_core/sft_trainer_qlora.py ...다음옵션...
 
 
 # Stage 1) 싱글턴 데이터로 1차 LoRA 학습
-while kill -0 132682 2>/dev/null; do sleep 30; done
+while kill -0 1986824 2>/dev/null; do sleep 30; done
 uv run models/qwen3_core/sft_trainer_qlora.py \
-  --model_name models/qwen3_core/model_assets/qwen3-4b \
+  --model_name models/qwen3_core/model_assets/kanana_3b \
   --data_path /mnt/d/rp_data/singleturn/rp_singleturn_cleaned.jsonl \
-  --output_dir models/qwen3_core/model_assets/qwen3_4b_rp_lora_stage1 \
-  --init_adapter_path models/qwen3_core/model_assets/qwen3_4b_lora1/final_adapter \
+  --output_dir models/qwen3_core/model_assets/kanana_3b_stage1 \
   --load_in_4bit \
   --bf16 \
   --gradient_checkpointing \
   --max_length 4096 \
   --per_device_train_batch_size 1 \
   --gradient_accumulation_steps 16 \
-  --num_train_epochs 8 \
+  --num_train_epochs 2 \
   --learning_rate 2e-5 \
   --warmup_ratio 0.05 \
   --save_steps 25 \
@@ -52,16 +51,16 @@ uv run models/qwen3_core/sft_trainer_qlora.py \
 
 while kill -0 132682 2>/dev/null; do sleep 30; done
 uv run models/qwen3_core/sft_trainer_qlora.py \
-  --model_name models/qwen3_core/model_assets/qwen3-8b \
+  --model_name models/qwen3_core/model_assets/rosetta_4b \
   --data_path /mnt/d/rp_data/rewrite/singleturn_rewrite.jsonl \
-  --output_dir models/qwen3_core/model_assets/qwen3_8b_stage1 \
+  --output_dir models/qwen3_core/model_assets/rosetta_4b_stage1 \
   --load_in_4bit \
   --bf16 \
   --gradient_checkpointing \
   --max_length 4096 \
   --per_device_train_batch_size 1 \
   --gradient_accumulation_steps 16 \
-  --num_train_epochs 6 \
+  --num_train_epochs 2 \
   --learning_rate 2e-5 \
   --warmup_ratio 0.05 \
   --save_steps 25 \

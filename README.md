@@ -584,6 +584,27 @@ REST 엔드포인트(현재):
 - 현재 `models/qwen3_core/grpo_trainer.py`는 지원 인자만 자동 주입하도록 호환 처리되어 있습니다.
 - 미지원 인자는 경고 로그 후 자동 제외됩니다.
 
+## 6-7. `flash-attn` 설치
+목적:
+- VLM/LLM 학습 시 FlashAttention2 경로를 사용하기 위해 `flash-attn` 설치
+
+설치:
+```bash
+sudo apt-get update
+sudo apt-get install nvidia-cuda-toolkit
+nvcc --version
+uv pip install flash-attn --no-build-isolation
+```
+
+확인:
+```bash
+uv run python -c "import flash_attn; print(flash_attn.__version__)"
+```
+
+주의:
+- 소스 빌드라 설치 시간이 오래 걸릴 수 있습니다.
+- 컴파일 중에는 `nvcc`, `cicc`, `ninja` 프로세스가 보이는 것이 정상입니다.
+
 
 ## 7) 권장 운영 순서
 

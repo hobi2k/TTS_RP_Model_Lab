@@ -16,9 +16,9 @@ from peft import PeftModel
 
 # 경로
 MODEL_ASSETS_DIR = Path(__file__).resolve().parent / "model_assets"
-BASE_MODEL = str(MODEL_ASSETS_DIR / "sft1")
-LORA_DIR = str(MODEL_ASSETS_DIR / "lasttry_stage2/lora_adapter")
-TOKENIZER = str(MODEL_ASSETS_DIR / "lasttry_stage2/tokenizer")
+BASE_MODEL = str(MODEL_ASSETS_DIR / "rosetta_4b")  # .../model_assets/rosetta_4b
+LORA_DIR = str(MODEL_ASSETS_DIR / "rosetta_4b_stage1/lora_adapter")
+TOKENIZER = str(MODEL_ASSETS_DIR / "rosetta_4b_stage1/tokenizer")
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 DTYPE = torch.bfloat16

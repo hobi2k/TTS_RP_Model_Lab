@@ -26,10 +26,10 @@ uv run models/qwen3_core/sft_trainer_hf.py \
 
 while kill -0 12345 2>/dev/null; do sleep 30; done
 uv run models/qwen3_core/sft_trainer_hf.py \
-  --model_name models/qwen3_core/model_assets/qwen3-4b \
+  --model_name models/qwen3_core/model_assets/rosetta_4b \
   --dataset_name junidude14/korean_roleplay_dataset_for_chat_game_2 \
-  --output_dir models/qwen3_core/model_assets/qwen3_4b_lora2 \
-  --init_adapter_path models/qwen3_core/model_assets/qwen3_4b_lora1/lora_adapter \
+  --dataset_split train \
+  --output_dir models/qwen3_core/model_assets/rosetta_4b_lora1 \
   --load_in_4bit \
   --bf16 \
   --gradient_checkpointing \
