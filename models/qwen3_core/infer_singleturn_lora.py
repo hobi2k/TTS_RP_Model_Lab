@@ -18,16 +18,45 @@ from peft import PeftModel
 MODEL_ASSETS_DIR = Path(__file__).resolve().parent / "model_assets"
 BASE_MODEL = str(MODEL_ASSETS_DIR / "rosetta_4b")  # .../model_assets/rosetta_4b
 LORA_DIR = str(MODEL_ASSETS_DIR / "rosetta_4b_stage1/lora_adapter")
-TOKENIZER = str(MODEL_ASSETS_DIR / "rosetta_4b_stage1/tokenizer")
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 DTYPE = torch.bfloat16
 
 
+def _has_tokenizer_files(model_dir: Path) -> bool:
+    """주요 tokenizer 파일 존재 여부를 확인한다."""
+    required = [
+        "tokenizer_config.json",
+        "tokenizer.json",
+        "vocab.json",
+        "merges.txt",
+        "spiece.model",
+    ]
+    return any((model_dir / name).exists() for name in required)
+
+
+def _resolve_tokenizer_source(base_model_dir: str, lora_dir: str) -> str:
+    """tokenizer 로드 경로를 우선순위에 따라 결정한다.
+
+    우선순위:
+    1) lora_dir/tokenizer
+    2) lora_dir
+    3) base_model_dir
+    """
+    lora_path = Path(lora_dir)
+    lora_tokenizer_path = lora_path / "tokenizer"
+    if _has_tokenizer_files(lora_tokenizer_path):
+        return str(lora_tokenizer_path)
+    if _has_tokenizer_files(lora_path):
+        return str(lora_path)
+    return str(Path(base_model_dir))
+
+
 # 로드
 def load_model():
     """토크나이저, Base 모델, LoRA adapter를 순서대로 로드한다."""
-    tokenizer = AutoTokenizer.from_pretrained(TOKENIZER, use_fast=True)
+    tokenizer_src = _resolve_tokenizer_source(BASE_MODEL, LORA_DIR)
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_src, use_fast=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 

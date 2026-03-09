@@ -59,6 +59,18 @@ def extract_output_text(generated_text: str) -> str:
     return generated_text.strip()
 
 
+def _has_tokenizer_files(model_dir: Path) -> bool:
+    """경로에 tokenizer 로드에 필요한 핵심 파일이 있는지 확인한다."""
+    required = [
+        "tokenizer_config.json",
+        "tokenizer.json",
+        "vocab.json",
+        "merges.txt",
+        "spiece.model",
+    ]
+    return any((model_dir / name).exists() for name in required)
+
+
 def main() -> None:
     """Base + LoRA 번역 모델을 로드해 단일 입력 문장을 번역한다."""
     parser = argparse.ArgumentParser()
@@ -85,7 +97,18 @@ def main() -> None:
     torch.manual_seed(args.seed)
 
     # Tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(base_dir, use_fast=True)
+    # 우선순위:
+    # 1) LoRA 디렉토리에 저장된 tokenizer (special token / chat template 변경 반영)
+    # 2) Base 모델 tokenizer
+    lora_path = Path(lora_dir)
+    lora_tokenizer_path = lora_path / "tokenizer"
+    if _has_tokenizer_files(lora_tokenizer_path):
+        tokenizer_src = str(lora_tokenizer_path)
+    elif _has_tokenizer_files(lora_path):
+        tokenizer_src = lora_dir
+    else:
+        tokenizer_src = base_dir
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_src, use_fast=True)
 
     # Qwen Base에서 pad_token 없는 경우가 많으므로 eos로 맞춘다.
     if tokenizer.pad_token is None:

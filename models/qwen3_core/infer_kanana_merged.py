@@ -1,0 +1,302 @@
+"""Kanana 전용 병합(merged) 모델 단일턴 RP 추론 스크립트.
+
+특징:
+- 병합 완료된 Kanana VLM 모델을 직접 로드해 추론한다.
+- LoRA adapter를 별도로 결합하지 않는다.
+- text-only 채팅 테스트를 위해 dummy image를 자동 주입한다.
+
+사용 예:
+uv run models/qwen3_core/infer_kanana_merged.py \
+  --model_dir models/qwen3_core/model_assets/kanana_3b \
+  --load_in_4bit \
+  --trust_remote_code
+"""
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+from typing import Any
+
+import torch
+from PIL import Image
+from transformers import AutoModelForVision2Seq, AutoProcessor, BitsAndBytesConfig
+
+
+def _has_any_file(dir_path: Path, candidates: list[str]) -> bool:
+    """디렉토리에 후보 파일 중 하나라도 존재하는지 확인한다."""
+    return any((dir_path / name).exists() for name in candidates)
+
+
+def _resolve_processor_source(merged_dir: Path) -> Path:
+    """processor 로드 경로를 결정한다.
+
+    우선순위:
+    1) merged_dir/processor
+    2) merged_dir
+    """
+    processor_files = ["processor_config.json", "preprocessor_config.json"]
+    p1 = merged_dir / "processor"
+    if p1.exists() and _has_any_file(p1, processor_files):
+        return p1
+    return merged_dir
+
+
+def _resolve_tokenizer_source(merged_dir: Path) -> Path:
+    """tokenizer 로드 경로를 결정한다.
+
+    우선순위:
+    1) merged_dir/tokenizer
+    2) merged_dir
+    """
+    tokenizer_files = [
+        "tokenizer_config.json",
+        "tokenizer.json",
+        "vocab.json",
+        "merges.txt",
+        "spiece.model",
+    ]
+    t1 = merged_dir / "tokenizer"
+    if t1.exists() and _has_any_file(t1, tokenizer_files):
+        return t1
+    return merged_dir
+
+
+def _build_kanana_conv(messages: list[dict[str, str]]) -> list[dict[str, str]]:
+    """대화 히스토리를 Kanana model card 권장 conv 포맷으로 변환한다.
+
+    포맷:
+    - 첫 user 메시지: "<image>"
+    - 둘째 user 메시지: 시스템+대화 히스토리 텍스트
+    """
+    lines: list[str] = []
+    for m in messages:
+        role = m.get("role", "").strip()
+        content = m.get("content", "").strip()
+        if not content:
+            continue
+        if role == "system":
+            lines.append(f"[시스템]\n{content}")
+        elif role == "assistant":
+            lines.append(f"[어시스턴트]\n{content}")
+        else:
+            lines.append(f"[사용자]\n{content}")
+    lines.append("[어시스턴트]\n")
+    text_prompt = "\n\n".join(lines)
+
+    return [
+        {"role": "user", "content": "<image>"},
+        {"role": "user", "content": text_prompt},
+    ]
+
+
+def load_model(
+    merged_model_dir: Path,
+    use_4bit: bool,
+    attn_implementation: str,
+    trust_remote_code: bool,
+) -> tuple[Any, Any]:
+    """병합된 Kanana 모델을 로드한다."""
+    dtype = torch.bfloat16
+    quant_config = None
+    if use_4bit:
+        quant_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=dtype,
+            bnb_4bit_use_double_quant=True,
+        )
+
+    processor_src = _resolve_processor_source(merged_model_dir)
+    tokenizer_src = _resolve_tokenizer_source(merged_model_dir)
+
+    processor = AutoProcessor.from_pretrained(str(processor_src), trust_remote_code=trust_remote_code)
+    try:
+        tok = AutoProcessor.from_pretrained(str(tokenizer_src), trust_remote_code=trust_remote_code).tokenizer
+        if tok is not None:
+            processor.tokenizer = tok
+    except Exception:
+        pass
+
+    if getattr(processor, "tokenizer", None) is not None and processor.tokenizer.pad_token_id is None:
+        processor.tokenizer.pad_token = processor.tokenizer.eos_token
+
+    model = AutoModelForVision2Seq.from_pretrained(
+        str(merged_model_dir),
+        torch_dtype=dtype,
+        device_map="auto",
+        quantization_config=quant_config,
+        attn_implementation=attn_implementation,
+        trust_remote_code=trust_remote_code,
+    )
+    model.eval()
+    return processor, model
+
+
+@torch.inference_mode()
+def generate_reply(
+    processor: Any,
+    model: Any,
+    messages: list[dict[str, str]],
+    max_length: int,
+    max_new_tokens: int,
+    do_sample: bool,
+    temperature: float,
+    top_p: float,
+    repetition_penalty: float,
+    dummy_image_size: int,
+) -> str:
+    """Kanana conv 포맷 입력으로 assistant 응답을 생성한다."""
+    conv = _build_kanana_conv(messages)
+    dummy = Image.new("RGB", (dummy_image_size, dummy_image_size), color=(255, 255, 255))
+
+    batch = processor.batch_encode_collate(
+        data_list=[{"conv": conv, "image": [dummy]}],
+        padding="longest",
+        padding_side="right",
+        max_length=max_length,
+        add_generation_prompt=True,
+    )
+
+    input_ids = batch["input_ids"]
+    prompt_len = input_ids.shape[-1]
+
+    model_device = next(model.parameters()).device
+    inputs = {}
+    for k, v in batch.items():
+        # Kanana generate는 image_metas 같은 비텐서 메타정보도 필요하다.
+        # 텐서만 추려 담으면 prepare_mm_inputs에서 None 오류가 발생한다.
+        if isinstance(v, torch.Tensor):
+            inputs[k] = v.to(model_device)
+        else:
+            inputs[k] = v
+
+    gen_kwargs = dict(
+        max_new_tokens=max_new_tokens,
+        do_sample=do_sample,
+        repetition_penalty=repetition_penalty,
+        use_cache=True,
+    )
+    tok = getattr(processor, "tokenizer", None)
+    if tok is not None:
+        if tok.eos_token_id is not None:
+            gen_kwargs["eos_token_id"] = tok.eos_token_id
+        if tok.pad_token_id is not None:
+            gen_kwargs["pad_token_id"] = tok.pad_token_id
+    if do_sample:
+        gen_kwargs.update(temperature=temperature, top_p=top_p, top_k=50)
+
+    output = model.generate(**inputs, **gen_kwargs)
+    out_ids = output[0]
+    # Kanana 커스텀 generate는
+    # 1) [prompt + generated] 전체를 주는 경우와
+    # 2) generated 토큰만 주는 경우가 모두 있을 수 있다.
+    # 항상 prompt_len을 슬라이스하면 (2)에서 빈 출력이 된다.
+    if out_ids.shape[-1] > prompt_len:
+        gen_ids = out_ids[prompt_len:]
+    else:
+        gen_ids = out_ids
+    if tok is None:
+        return ""
+    text = tok.decode(gen_ids, skip_special_tokens=True).strip()
+    # 특수토큰 제거 후 빈 문자열이 되면 raw 디코드로 한 번 더 시도한다.
+    if not text:
+        text = tok.decode(gen_ids, skip_special_tokens=False).strip()
+    return text
+
+
+def chat_loop(args: argparse.Namespace) -> None:
+    """터미널 기반 대화 루프를 실행한다."""
+    processor, model = load_model(
+        merged_model_dir=Path(args.model_dir).resolve(),
+        use_4bit=args.load_in_4bit,
+        attn_implementation=args.attn_implementation,
+        trust_remote_code=args.trust_remote_code,
+    )
+
+    messages: list[dict[str, str]] = [
+        {
+            "role": "system",
+            "content": (
+                """
+                당신은 이 이야기의 주인공 사야다.
+                사야의 시점에서 반응해라.
+
+                0. 이야기 장르 및 시대
+                - 장르: 심리 시뮬레이션
+                - 시대 배경: 현대
+
+                1. 역할 선언
+                - 당신은 이 이야기의 주인공 사야다.
+                - 사야는 20대 초반 여성이다.
+                - 사야는 반말을 사용한다.
+                - 플레이어는 카즈키다.
+                - assistant는 카즈키(user)의 대사나 행동을 대신 작성하지 않는다.
+
+                2. 세계 규칙
+                - 이야기는 사야의 집에서 전개된다.
+
+                3. 관계 구조
+                - 사야는 카즈키를 좋아한다.
+                - 카즈키는 사야를 처음 본다.
+                - 사야는 카즈키를 유혹하려고 한다.
+                
+                4. 출력 규칙
+                - assistant 출력은 서술 1블록 + 대사 1블록으로 작성한다. 서술은 3인칭 평어체로 작성하고, 대사는 큰따옴표로 감싼다.
+                - 한 턴에는 하나의 서술과 하나의 대사만 작성한다.
+                - 대사 규칙: 카즈키 대사를 작성하지 않는다.
+                """
+            ),
+        }
+    ]
+
+    print("=== Kanana Merged RP Chat Started (type 'exit' to quit) ===")
+    while True:
+        user_input = input("\nUSER > ").strip()
+        if user_input.lower() in {"exit", "quit"}:
+            break
+        if not user_input:
+            continue
+
+        messages.append({"role": "user", "content": user_input})
+        reply = generate_reply(
+            processor=processor,
+            model=model,
+            messages=messages,
+            max_length=args.max_length,
+            max_new_tokens=args.max_new_tokens,
+            do_sample=args.do_sample,
+            temperature=args.temperature,
+            top_p=args.top_p,
+            repetition_penalty=args.repetition_penalty,
+            dummy_image_size=args.dummy_image_size,
+        )
+        messages.append({"role": "assistant", "content": reply})
+
+        print("\nASSISTANT >")
+        print(reply)
+
+
+def main() -> None:
+    """CLI 엔트리포인트."""
+    p = argparse.ArgumentParser()
+    default_assets = Path(__file__).resolve().parent / "model_assets"
+    p.add_argument("--model_dir", type=str, default=str(default_assets / "kanana_3b"))
+    p.add_argument("--trust_remote_code", action="store_true", default=True)
+    p.add_argument("--load_in_4bit", action="store_true")
+    p.add_argument("--attn_implementation", type=str, default="flash_attention_2", choices=["flash_attention_2", "sdpa", "eager"])
+
+    p.add_argument("--max_length", type=int, default=4096)
+    p.add_argument("--max_new_tokens", type=int, default=220)
+    p.add_argument("--do_sample", action="store_true", default=True)
+    p.add_argument("--temperature", type=float, default=0.7)
+    p.add_argument("--top_p", type=float, default=0.9)
+    p.add_argument("--repetition_penalty", type=float, default=1.05)
+    p.add_argument("--dummy_image_size", type=int, default=224)
+    args = p.parse_args()
+
+    chat_loop(args)
+
+
+if __name__ == "__main__":
+    main()
