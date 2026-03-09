@@ -9,7 +9,7 @@
 
 uv run models/qwen3_core/sft_trainer_qlora_kanana.py \
   --model_name models/qwen3_core/model_assets/kanana_3b \
-  --data_path /mnt/d/rp_data/singleturn/rp_singleturn_cleaned.jsonl \
+  --data_path /mnt/d/rp_data/rewrite/singleturn_rewrite.jsonl \
   --output_dir models/qwen3_core/model_assets/kanana_3b_stage1 \
   --load_in_4bit \
   --bf16 \
