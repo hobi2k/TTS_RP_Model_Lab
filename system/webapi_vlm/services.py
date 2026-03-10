@@ -10,6 +10,7 @@ from collections import deque
 from pathlib import Path
 from threading import Lock, RLock
 
+from system.memory_chain import SummaryMemoryChain, SummaryMemoryConfig
 from system.prompt_compiler import CharacterProfile, PromptCompiler
 from system.rp_parser import RPParser
 from system.vlm_langgraph_pipeline import build_vlm_turn_graph
@@ -26,9 +27,11 @@ class RuntimeServices:
         self._history: deque[dict] = deque(maxlen=6)
         self._vlm = None
         self._prompt_compiler = PromptCompiler(CharacterProfile(name="사야"))
+        self._memory_chain = None
         self._turn_graph = None
         self._translator = None
         self._tts = None
+        self._memory_debug = os.getenv("VLM_MEMORY_DEBUG", "0") == "1"
 
         project_root = Path(__file__).resolve().parents[2]
         self.vlm_model = os.getenv(
@@ -120,9 +123,27 @@ class RuntimeServices:
         """현재 user 입력에 대한 VLM 입력 메시지 배열을 만든다."""
         messages: list[dict] = []
         messages.extend(self._prompt_compiler.compile())
+        memory_msg = self._memory_chain.build_memory_system_message(current_user_text=text)
+        if memory_msg is not None:
+            if self._memory_debug:
+                preview = str(memory_msg.get("content", "")).replace("\n", " ")[:240]
+                print(f"[vlm-memory] chat inject: {preview}")
+            messages.append(memory_msg)
         messages.extend(self._history)
         messages.append({"role": "user", "content": text})
         return messages
+
+    def _ensure_memory_chain(self):
+        """장기 기억 체인을 필요 시 생성하고 반환한다."""
+        if self._memory_chain is not None:
+            return self._memory_chain
+        with self._load_lock:
+            if self._memory_chain is None:
+                self._memory_chain = SummaryMemoryChain(
+                    self._ensure_vlm(),
+                    SummaryMemoryConfig(enabled=True, update_every_turns=1, max_summary_chars=900),
+                )
+        return self._memory_chain
 
     def _ensure_turn_graph(self):
         """LangGraph 기반 VLM 턴 파이프라인을 필요 시 생성하고 반환한다."""
@@ -130,6 +151,7 @@ class RuntimeServices:
             return self._turn_graph
         with self._load_lock:
             if self._turn_graph is None:
+                self._ensure_memory_chain()
                 self._turn_graph = build_vlm_turn_graph(
                     llm_engine=self._ensure_vlm(),
                     rp_parser=self._parser,
@@ -141,6 +163,8 @@ class RuntimeServices:
                         speaker_name=speaker_name,
                     ),
                     prompt_compiler=self._prompt_compiler,
+                    memory_chain=self._memory_chain,
+                    debug_memory=self._memory_debug,
                     history=self._history,
                     normalize_dialogue=self._normalize_single_line_dialogue,
                     infer_emotion_fallback=self._infer_emotion_keyword,
@@ -159,6 +183,7 @@ class RuntimeServices:
         """VLM 단일 응답을 생성하고 히스토리를 갱신한다."""
         with self._turn_lock:
             vlm = self._ensure_vlm()
+            self._ensure_memory_chain()
             messages = self._build_messages(text)
             raw_text = vlm.generate_from_messages(
                 messages,
@@ -174,8 +199,14 @@ class RuntimeServices:
                 ),
                 image_path=image_path,
             )
+            rp = self._parser.parse(raw_text)
+            mem_assistant_text = "\n".join(
+                p for p in [rp.narration.strip(), self._normalize_single_line_dialogue(rp.dialogue_en or "")]
+                if p
+            ).strip() or raw_text
             self._history.append({"role": "user", "content": text})
             self._history.append({"role": "assistant", "content": raw_text})
+            self._memory_chain.update(user_text=text, assistant_text=mem_assistant_text)
             return raw_text
 
     def translate(self, text_ko: str, max_new_tokens: int, temperature: float, top_p: float) -> str:

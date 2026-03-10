@@ -7,7 +7,7 @@
 
 사용 예:
 uv run models/qwen3_core/infer_kanana_merged.py \
-  --model_dir models/qwen3_core/model_assets/saya_vlm_3b_sft \
+  --model_dir models/qwen3_core/model_assets/saya_vlm_3b \
   --load_in_4bit \
   --trust_remote_code
 """

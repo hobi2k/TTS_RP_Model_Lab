@@ -37,7 +37,7 @@ try:
 except Exception:
     sqlite_vec = None
 
-from system.llm_engine import GenerationConfig, QwenEngine
+from system.llm_engine import GenerationConfig
 
 
 def _utc_now() -> str:
@@ -123,14 +123,14 @@ class SummaryMemoryChain:
     장기기억 후보 추출/승격/검색을 수행하는 메모리 체인이다.
 
     args:
-    - llm_engine (QwenEngine): 후보 추출용 LLM 엔진
+    - llm_engine (Any): 후보 추출용 LLM 엔진
     - config (SummaryMemoryConfig | None): 설정 (None이면 기본값)
 
     returns:
     - SummaryMemoryChain: 메모리 체인 인스턴스
     """
 
-    def __init__(self, llm_engine: QwenEngine, config: SummaryMemoryConfig | None = None) -> None:
+    def __init__(self, llm_engine: Any, config: SummaryMemoryConfig | None = None) -> None:
         self.llm_engine = llm_engine
         self.config = config or SummaryMemoryConfig()
         self.summary_text: str = ""
@@ -416,7 +416,13 @@ class SummaryMemoryChain:
             {"role": "system", "content": "출력은 JSON 객체 하나만."},
             {"role": "user", "content": prompt},
         ]
-        out = self.llm_engine.generate(self.llm_engine.build_prompt(msgs), gen_config=self.extract_gen)
+        if hasattr(self.llm_engine, "generate_from_messages"):
+            out = self.llm_engine.generate_from_messages(msgs, gen_config=self.extract_gen)
+        else:
+            out = self.llm_engine.generate(
+                self.llm_engine.build_prompt(msgs),
+                gen_config=self.extract_gen,
+            )
         if not out:
             return []
         m = re.search(r"\{[\s\S]*\}", out)

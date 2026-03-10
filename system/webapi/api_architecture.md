@@ -1,262 +1,335 @@
-# FastAPI RESTful API + Demo Architecture Guide
+# Qwen WebAPI Architecture
 
-이 문서는 `system/webapi` 아키텍처 문서다.
+이 문서는 현재 `system/webapi` 폴더의 실제 코드 기준 아키텍처 문서다.
 
-대상 코드:
+대상 파일:
 - `system/webapi/app.py`
 - `system/webapi/schemas.py`
 - `system/webapi/services.py`
 - `system/webapi/demo.py`
 
----
-
-## 1. 먼저 이해해야 할 FastAPI 핵심 개념
-
-FastAPI는 크게 네 가지로 이해하면 된다.
-
-1. **Path Operation(라우트 함수)**
-- `@app.get`, `@app.post` 데코레이터로 URL과 메서드를 정의한다.
-- 함수는 HTTP 요청을 받아 비즈니스 로직을 실행하고 응답을 반환한다.
-
-2. **Pydantic 모델(요청/응답 스키마)**
-- 요청 바디 검증과 응답 형식 보장을 담당한다.
-- 잘못된 입력을 초기에 차단하고, API 계약을 명확히 만든다.
-
-3. **의존 서비스 계층 분리**
-- 라우트 안에서 모델 로딩, 상태 관리, 파이프라인 조합까지 직접 처리하면 유지보수가 어렵다.
-- 그래서 라우트는 얇게 유지하고, 실제 처리는 별도 서비스 클래스(`RuntimeServices`)가 담당한다.
-
-4. **OpenAPI 자동 문서화**
-- 스키마를 잘 설계하면 `/docs`에 자동으로 API 명세가 생성된다.
-- 협업과 테스트 효율이 크게 올라간다.
+관련 코어 모듈:
+- `system/llm_engine.py`
+- `system/langgraph_pipeline.py`
+- `system/memory_chain.py`
+- `system/prompt_compiler.py`
+- `system/rp_parser.py`
+- `system/translator.py`
+- `system/tts_worker_client.py`
 
 ---
 
-## 2. RESTful 관점에서 이 프로젝트를 어떻게 나눴는가
+## 1. 목적
 
-이 프로젝트는 "기능 단위 endpoint"와 "통합 endpoint"를 함께 제공하는 방식으로 설계되었다.
+`system/webapi`는 Qwen 계열 텍스트 RP 모델을 REST API와 Gradio UI로 노출하는 서버 계층이다.
 
-- 기능 단위 endpoint
-  - `/api/chat`: RP 응답 생성만
-  - `/api/parse`: 파싱만
-  - `/api/translate`: 번역만
-  - `/api/tts`: 음성합성만
+현재 목표는 세 가지다.
 
-- 통합 endpoint
-  - `/api/turn` (`/api/main-loop` 동일):
-    - 입력 → LLM 생성 → 파싱 → 번역 → TTS → 감정판정 → 메모리 업데이트
-
-이렇게 나누는 이유는 단순하다.
-- 디버깅/테스트는 단일 기능 endpoint가 유리하다.
-- 실제 제품 동작은 통합 endpoint가 유리하다.
-
-즉, "개발 효율"과 "운영 동선"을 동시에 맞춘 구조다.
+1. 텍스트 RP 턴을 안정적으로 실행
+2. history + long-term memory를 포함한 메인 파이프라인 제공
+3. 디버그 가능한 단일 기능 API와 실제 시연용 통합 API를 동시에 제공
 
 ---
 
-## 3. 계층 설계: 왜 `app.py`와 `services.py`를 분리했는가
+## 2. 구성 요약
 
-### 3.1 `app.py`의 책임
+## 2.1 `app.py`
 
-`app.py`는 HTTP 레이어만 담당한다.
+FastAPI 엔트리포인트다.
 
-- 라우트 선언
-- 요청/응답 스키마 연결
-- 예외를 HTTP 에러로 변환
-- CORS/리다이렉트/데모 마운트 같은 웹 설정
+역할:
+- CORS 설정
+- REST 라우트 선언
+- 예외를 `HTTPException(500)`로 변환
+- `/demo` Gradio 마운트
 
-중요한 점은, `app.py`가 "모델 내부 로직"을 거의 모른다는 것이다.
-이 원칙을 지켜야 API 구조를 오래 유지할 수 있다.
+## 2.2 `schemas.py`
 
-### 3.2 `services.py`의 책임
+Pydantic 요청/응답 스키마 정의다.
 
-`RuntimeServices`는 도메인 실행 엔진이다.
+핵심 모델:
+- `ChatRequest`, `ChatResponse`
+- `TranslateRequest`, `TranslateResponse`
+- `ParseRequest`, `ParseResponse`
+- `TTSRequest`, `TTSResponse`
+- `TurnRequest`, `TurnResponse`
+- `EmotionState`
 
-- LLM/Translator/TTS 지연 로딩
-- 프롬프트 조립
-- short-term history + long-term memory retrieval 주입
-- 응답 파싱/번역/TTS 순차 실행
-- 감정 JSON 판정
-- 상태 업데이트
+## 2.3 `services.py`
 
-즉, 라우트 함수는 "입력 전달 + 결과 반환"만 하고,
-실제 업무 로직은 전부 `RuntimeServices`에 집중한다.
+실제 런타임 컨테이너다.
+
+핵심 클래스:
+- `RuntimeServices`
+
+역할:
+- 모델 지연 로딩
+- prompt/history/memory 조립
+- LangGraph 파이프라인 실행
+- 단일 기능 메서드 제공
+
+## 2.4 `demo.py`
+
+Gradio 기반 VN 스타일 데모 UI다.
+
+역할:
+- `/api/main-loop` 호출
+- 타자 효과 출력
+- 감정 one-hot 기반 표정 이미지 선택
+- transcript/debug 정보 표시
 
 ---
 
-## 4. 요청/응답 설계 방법 (`schemas.py`)
+## 3. API 구성
 
-이 프로젝트 스키마 설계의 핵심 원칙은 두 가지다.
+현재 endpoint는 두 층으로 나뉜다.
 
-1. **요청에 경계값을 둔다**
-- 예: `text`는 `min_length=1`
-- 예: `temperature`, `top_p`, `top_k` 범위 제한
+### 3.1 단일 기능 endpoint
 
-2. **응답을 고정 구조로 만든다**
-- 예: `TurnResponse`는 항상 `rp_text`, `narration`, `dialogue_ko`, `dialogue_ja`, `wav_path`, `emotion` 필드를 제공
-- 클라이언트가 분기 로직을 단순하게 작성할 수 있다.
+- `POST /api/chat`
+  - RP 원문 생성만 수행
 
-`EmotionState`를 별도 모델로 둔 것도 같은 이유다.
-- one-hot 규약을 API 레벨에서 드러내기 쉽다.
+- `POST /api/parse`
+  - RP 원문 파싱만 수행
+
+- `POST /api/translate`
+  - 한국어 대사를 일본어로 번역
+
+- `POST /api/tts`
+  - 일본어 대사를 음성으로 합성
+
+### 3.2 통합 endpoint
+
+- `POST /api/turn`
+- `POST /api/main-loop`
+
+두 endpoint는 현재 같은 파이프라인을 호출한다.
+
+실행 순서:
+- input
+- prompt assembly
+- memory injection
+- LLM generation
+- RP parse
+- translate
+- emotion
+- TTS
+- history update
+- memory update
 
 ---
 
-## 5. 실제 메인 파이프라인 구현 흐름 (`RuntimeServices.turn`)
+## 4. 런타임 서비스 구조
 
-`turn()`은 사실상 main_loop 서버 버전이다. 실행 순서는 아래와 같다.
+`RuntimeServices`는 무거운 객체를 lazy-load한다.
 
-1. `self._turn_lock` 획득
-- history/memory/DB 업데이트 충돌을 방지하기 위해 턴 단위 직렬화
+주요 내부 필드:
+- `_llm`
+- `_translator`
+- `_tts`
+- `_prompt_compiler`
+- `_memory_chain`
+- `_turn_graph`
+- `_history`
 
-2. 컴포넌트 보장
-- `_ensure_llm()`
-- `_ensure_translator()`
-- `_ensure_tts()`
-- `_ensure_mainloop_components()`
+동시성 제어:
+- `_load_lock`
+  - 중복 로딩 방지
+- `_turn_lock`
+  - 턴 실행 직렬화
 
-3. 프롬프트 메시지 구성
-- 캐릭터 system 프롬프트
-- memory system 메시지(장기기억 retrieval 결과)
-- 최근 history
-- 현재 user 입력
+`_history`는 `deque(maxlen=6)`이다.
+즉 user/assistant 2개 메시지 기준 최근 3턴만 유지한다.
 
-4. LLM 생성
-- `raw_text`
+---
 
-5. RP 파싱
-- narration / dialogue 분리
+## 5. 메인 파이프라인
 
-6. 번역기 입력 정규화
-- 대사는 "한 줄"로 정규화해서 번역기로 전달
+`services.turn()`은 직접 모든 단계를 구현하지 않고 `LangGraph`를 호출한다.
 
-7. 번역 + TTS
-- `dialogue_ko -> dialogue_ja -> wav_path`
+실제 그래프는 `system/langgraph_pipeline.py`의 `build_turn_graph()`에서 만든다.
 
-8. 감정 판정
-- 1차: LLM JSON one-hot
-- 실패 시: 키워드 fallback
+노드 순서:
+1. `prepare_prompt`
+2. `generate_parse`
+3. `translate`
+4. `emotion`
+5. `tts`
+6. `commit`
 
-9. 상태 업데이트
-- short-term history append
+### 5.1 `prepare_prompt`
+
+메시지 배열을 조립한다.
+
+순서:
+1. 캐릭터 system prompt
+2. memory system message
+3. recent history
+4. current user message
+
+### 5.2 `generate_parse`
+
+`QwenEngine`로 prompt를 생성하고, RP 텍스트를 뽑은 뒤 `RPParser`로 구조화한다.
+
+### 5.3 `translate`
+
+정규화된 한국어 대사를 일본어로 번역한다.
+
+### 5.4 `emotion`
+
+우선 `llm_engine.infer_emotion_json()`을 시도하고, 실패하면 키워드 기반 fallback으로 one-hot 감정을 만든다.
+
+### 5.5 `tts`
+
+일본어 대사가 있으면 SBV2 워커로 합성한다.
+
+### 5.6 `commit`
+
+여기서 상태가 실제로 저장된다.
+
+- history append
 - memory chain update
 
-10. `TurnResponse` 형태 반환
-
-이 순서를 고정한 이유는, 출력 품질보다 먼저 **재현성**을 지키기 위해서다.
-(같은 입력에서 단계가 바뀌면 결과와 디버깅이 흔들린다.)
+즉 메모리 체인은 턴이 끝난 뒤 commit 시점에 갱신된다.
 
 ---
 
-## 6. 동시성과 안정성: 실제 운영에서 중요한 부분
+## 6. 메모리 체인
 
-웹 환경에서는 같은 API가 동시에 들어온다. 이때 깨지기 쉬운 지점은 상태 공유다.
+`webapi`는 현재 `SummaryMemoryChain`를 사용한다.
 
-이 프로젝트가 택한 방법:
+구성:
+- SQLite 저장
+- 후보 기억 추출
+- 점수화
+- slot 승격
+- retrieval
+- system message 주입
 
-- `RuntimeServices` 단일 인스턴스 사용
-- `_load_lock`
-  - 모델 중복 로딩 방지
-- `_turn_lock`
-  - turn 파이프라인 직렬화
-- SQLite는 `check_same_thread=False`
-  - 단, 무제한 병렬 접근이 아니라 상위 lock 직렬화 전제를 둠
+프롬프트 주입 위치:
+- `prepare_prompt` 노드에서 `prompt_compiler.compile()` 뒤에 memory system message 추가
 
-즉, "DB 옵션으로 병렬 처리"가 아니라 "상위 파이프라인 직렬 제어"로 안정성을 확보했다.
+업데이트 위치:
+- `commit` 노드에서 `memory_chain.update(...)`
 
----
+즉 현재 `webapi` 경로는
+- short-term history
+- long-term memory
 
-## 7. 에러 처리 전략
-
-라우트 함수는 try/except로 서비스 예외를 잡아 `HTTPException(500)`로 변환한다.
-
-예:
-- `/api/main-loop` 실패 시
-  - `detail="main-loop failed: ..."`
-
-`demo.py`는 이 500을 다시 잡아서 화면용 오류 프레임으로 바꾼다.
-- 사용자에게는 VN 대화창 안에서 오류를 표시
-- 개발자는 서버 로그에서 원인 확인
-
-즉, API와 UI가 각각 자기 레이어에서 에러를 처리한다.
+둘 다 사용한다.
 
 ---
 
-## 8. Gradio 데모를 "REST 소비자"로 붙인 이유
+## 7. Qwen 엔진 특성
 
-`/demo`는 내부 함수 직접호출이 아니라 `httpx`로 REST endpoint를 호출한다.
+현재 `QwenEngine`는 프로젝트 설정에 따라 vLLM 또는 Hugging Face 경로를 사용할 수 있다.
 
-이렇게 구현한 이유:
-- 데모와 실제 API를 분리된 계약으로 유지
-- 데모가 곧 API 통합 테스트 역할
-- 나중에 프론트엔드를 Gradio에서 React/Unity로 바꿔도 API는 그대로 재사용 가능
+이 `webapi` 경로는 "vLLM을 쓸 수 있는 텍스트 causal LM 경로"라는 점이 `webapi_vlm`과 가장 큰 차이다.
 
-즉, 데모를 백엔드 내부 함수 호출기로 만들지 않고, **클라이언트처럼** 동작시켜 구조를 검증한다.
-
----
-
-## 9. 메인루프 시연 UX 구현 포인트 (`demo.py`)
-
-`mainloop_turn()`은 generator로 구현되어 단계적 렌더링을 한다.
-
-1. 첫 프레임
-- narration 표시
-- 대사는 비움
-
-2. 타자 효과 프레임
-- `dialogue_ko`를 글자 단위로 점진 출력
-
-3. 최종 프레임
-- 전체 텍스트 확정
-- 오디오 경로 반영(autoplay)
-- transcript/history 갱신
-
-감정 이미지도 이 시점에 적용된다.
-- angry/sad/happy/neutral one-hot에 맞는 이미지 선택
+정리:
+- 입력: text-only
+- 엔진: `QwenEngine`
+- backend: vLLM/HF 가능
 
 ---
 
-## 10. 환경변수 설계
+## 8. 응답 계약
+
+통합 응답은 `TurnResponse`를 따른다.
+
+필드:
+- `rp_text`
+- `narration`
+- `dialogue_ko`
+- `dialogue_ja`
+- `wav_path`
+- `emotion`
+
+`emotion`은 one-hot 구조다.
+
+```json
+{
+  "neutral": 1,
+  "sad": 0,
+  "happy": 0,
+  "angry": 0
+}
+```
+
+이 구조는 UI 쪽 표정 렌더링에 바로 사용된다.
+
+---
+
+## 9. Gradio 데모 구조
+
+`demo.py`는 내부 함수를 직접 호출하지 않고 `httpx`로 REST endpoint를 호출한다.
+
+즉 이 데모는 단순 view가 아니라 API 소비자다.
+
+장점:
+- 실제 운영 경로와 동일한 계약 검증
+- UI와 백엔드 분리 유지
+- 이후 프론트엔드 교체 시 API 재사용 가능
+
+### 메인 UX 흐름
+
+`mainloop_turn()`은 generator 기반이다.
+
+순서:
+1. `/api/main-loop` 호출
+2. narration만 먼저 렌더
+3. dialogue_ko 타자 효과 출력
+4. 최종 프레임에서 wav/autoplay/history 반영
+
+감정 상태는 `_normalize_emotion()` -> `_pick_char_b64()`로 이어져 표정 이미지를 선택한다.
+
+---
+
+## 10. 환경변수
 
 주요 환경변수:
 
-- `WEBAPI_ENABLE_GRADIO` (기본 1)
-  - 1: `/demo` 활성
-  - 0: REST 전용
+- `WEBAPI_ENABLE_GRADIO`
+  - `1`이면 `/demo` 활성
 
 - `WEBAPI_BASE_URL`
-  - demo가 호출할 API base URL
+  - demo가 REST를 호출할 base URL
 
 - `QWEN_MODEL_DIR`
-  - RP LLM 경로 오버라이드
+  - 텍스트 RP 모델 경로
 
 - `TRANS_MODEL_DIR`
-  - 번역 모델 경로 오버라이드
-
-경로를 환경변수로 열어둔 이유:
-- 로컬/서버/배포 환경 차이에 대응
-- 코드 수정 없이 모델 경로 교체 가능
+  - 번역 모델 경로
 
 ---
 
-## 11. 현재 구조 구현 방법
+## 11. 안정성 설계 포인트
 
-아래 순서로 구현하면 같은 아키텍처를 구현할 수 있다.
+이 경로는 상태를 공유하므로 동시 실행보다 일관성을 우선한다.
 
-1. `schemas.py`부터 설계
-- request/response 계약 확정
+핵심 원칙:
+- 모델 로딩은 lazy
+- 턴 실행은 직렬화
+- SQLite는 `check_same_thread=False`지만 실질 동시 접근은 `_turn_lock`로 막음
 
-2. `services.py` 작성
-- 모델 로딩, 파이프라인, 상태 관리, lock
+즉 "빠른 병렬 응답"보다 "history/memory 불일치 방지"가 더 우선인 구조다.
 
-3. `app.py` 작성
-- 엔드포인트를 서비스 메서드에 매핑
-- 예외를 HTTPException으로 통일
+---
 
-4. API 단위 테스트
-- `/api/chat`, `/api/translate`, `/api/tts`를 먼저 검증
+## 12. 요약
 
-5. `/api/turn` 통합 검증
-- end-to-end 결과 확인
+`system/webapi`는 현재 다음 조합으로 동작한다.
+
+- Qwen 텍스트 LLM
+- LangGraph 턴 파이프라인
+- SummaryMemoryChain
+- RP 파싱
+- 번역
+- 감정 판정
+- TTS
+- REST API + Gradio
+
+즉 텍스트 RP 메인 경로의 기준 구현이다.
 
 6. `demo.py` 연결
 - REST 호출 기반으로 UI를 붙임

@@ -83,29 +83,24 @@ class KananaVLMEngine:
 
     @staticmethod
     def _build_conv(messages: list[dict[str, Any]]) -> list[dict[str, str]]:
-        """OpenAI-style messages를 Kanana conv 포맷으로 변환한다."""
-        lines: list[str] = []
+        """OpenAI-style messages를 Kanana 학습 포맷과 맞는 conv로 변환한다."""
+        conv: list[dict[str, str]] = []
+        image_inserted = False
         for message in messages:
             role = str(message.get("role", "")).strip()
             content = str(message.get("content", "")).strip()
             if not content:
                 continue
             if role == "system":
-                lines.append(f"[시스템]\n{content}")
+                conv.append({"role": "system", "content": content})
             elif role == "assistant":
-                lines.append(f"[어시스턴트]\n{content}")
+                conv.append({"role": "assistant", "content": content})
             else:
-                lines.append(f"[사용자]\n{content}")
-        lines.append("[어시스턴트]\n")
-        text_prompt = "\n\n".join(lines)
-        return [
-            {"role": "user", "content": "<image>"},
-            {"role": "user", "content": text_prompt},
-        ]
-
-    def build_prompt(self, messages: list[dict[str, Any]]) -> list[dict[str, str]]:
-        """상위 파이프라인과 맞추기 위한 공통 인터페이스."""
-        return self._build_conv(messages)
+                if not image_inserted:
+                    content = f"<image>\n{content}"
+                    image_inserted = True
+                conv.append({"role": "user", "content": content})
+        return conv
 
     def generate_from_messages(
         self,
@@ -114,7 +109,11 @@ class KananaVLMEngine:
         image_path: str | None = None,
     ) -> str:
         """메시지 배열을 바로 생성에 연결하는 헬퍼."""
-        return self.generate(self.build_prompt(messages), gen_config=gen_config, image_path=image_path)
+        return self.generate(
+            self._build_conv(messages),
+            gen_config=gen_config,
+            image_path=image_path,
+        )
 
     def _extract_assistant_text(self, decoded: str) -> str:
         """전체 디코드 문자열에서 마지막 assistant 구간만 추출한다."""
@@ -143,13 +142,26 @@ class KananaVLMEngine:
     ) -> str:
         """Kanana conv 입력으로 assistant 응답 텍스트를 생성한다."""
         cfg = gen_config or self.default_gen
-        image = self._load_image(image_path, cfg.dummy_image_size)
+        max_length = int(getattr(cfg, "max_length", self.default_gen.max_length))
+        max_new_tokens = int(getattr(cfg, "max_new_tokens", self.default_gen.max_new_tokens))
+        do_sample = bool(getattr(cfg, "do_sample", self.default_gen.do_sample))
+        temperature = float(getattr(cfg, "temperature", self.default_gen.temperature))
+        top_p = float(getattr(cfg, "top_p", self.default_gen.top_p))
+        top_k = int(getattr(cfg, "top_k", self.default_gen.top_k))
+        repetition_penalty = float(
+            getattr(cfg, "repetition_penalty", self.default_gen.repetition_penalty)
+        )
+        dummy_image_size = int(
+            getattr(cfg, "dummy_image_size", self.default_gen.dummy_image_size)
+        )
+
+        image = self._load_image(image_path, dummy_image_size)
 
         batch = self.processor.batch_encode_collate(
             data_list=[{"conv": prompt, "image": [image]}],
             padding="longest",
             padding_side="right",
-            max_length=cfg.max_length,
+            max_length=max_length,
             add_generation_prompt=True,
         )
 
@@ -159,9 +171,9 @@ class KananaVLMEngine:
             inputs[key] = value.to(model_device) if isinstance(value, torch.Tensor) else value
 
         gen_kwargs: dict[str, Any] = {
-            "max_new_tokens": cfg.max_new_tokens,
-            "do_sample": cfg.do_sample,
-            "repetition_penalty": cfg.repetition_penalty,
+            "max_new_tokens": max_new_tokens,
+            "do_sample": do_sample,
+            "repetition_penalty": repetition_penalty,
             "use_cache": True,
         }
         if self.tokenizer is not None:
@@ -169,11 +181,11 @@ class KananaVLMEngine:
                 gen_kwargs["eos_token_id"] = self.tokenizer.eos_token_id
             if self.tokenizer.pad_token_id is not None:
                 gen_kwargs["pad_token_id"] = self.tokenizer.pad_token_id
-        if cfg.do_sample:
+        if do_sample:
             gen_kwargs.update(
-                temperature=cfg.temperature,
-                top_p=cfg.top_p,
-                top_k=cfg.top_k,
+                temperature=temperature,
+                top_p=top_p,
+                top_k=top_k,
             )
 
         output = self.model.generate(**inputs, **gen_kwargs)
