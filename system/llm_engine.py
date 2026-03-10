@@ -19,8 +19,9 @@ import re
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from peft import PeftModel
-from vllm import LLM, SamplingParams
 
+os.environ.setdefault("VLLM_WORKER_MULTIPROC_METHOD", "spawn")
+from vllm import LLM, SamplingParams
 
 @dataclass
 class GenerationConfig:
