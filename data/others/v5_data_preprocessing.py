@@ -24,10 +24,10 @@ uv run data/others/v5_data_preprocessing.py \
 
   
 uv run data/others/v5_data_preprocessing.py \
-  --in_jsonl /mnt/d/rp_data/v7/rp_datum_unite.jsonl \
-  --out_jsonl /mnt/d/rp_data/v7/rp_datum_unite_cleaned.jsonl \
-  --model_name models/qwen3_core/model_assets/qwen3-8b \
-  --max_length 4096  
+  --in_jsonl /mnt/d/rp_data/rewrite/multiturn_rewrite.jsonl \
+  --out_jsonl /mnt/d/rp_data/rewrite/multiturn_rewrite_vlm.jsonl \
+  --model_name models/qwen3_core/model_assets/kanana_3b \
+  --max_length 1536 
 """
 
 from __future__ import annotations

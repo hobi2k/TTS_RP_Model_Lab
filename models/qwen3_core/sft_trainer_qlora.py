@@ -128,19 +128,18 @@ uv run models/qwen3_core/sft_trainer_qlora.py \
   --metric_for_best_model eval_loss \
   --assistant_only_loss
 
-while kill -0 323176 2>/dev/null; do sleep 30; done
+while kill -0 37592 2>/dev/null; do sleep 30; done
 uv run models/qwen3_core/sft_trainer_qlora.py \
-  --model_name models/qwen3_core/model_assets/qwen3-4b \
+  --model_name models/qwen3_core/model_assets/rosetta_4b_merge1 \
   --data_path /mnt/d/rp_data/rewrite/multiturn_rewrite.jsonl \
-  --output_dir models/qwen3_core/model_assets/qwen3_4b_rp_lora_stage2 \
-  --init_adapter_path models/qwen3_core/model_assets/qwen3_4b_rp_lora_stage1/lora_adapter \
+  --output_dir models/qwen3_core/model_assets/rosetta_4b_stage2 \
   --load_in_4bit \
   --bf16 \
   --gradient_checkpointing \
   --max_length 4096 \
   --per_device_train_batch_size 1 \
   --gradient_accumulation_steps 16 \
-  --num_train_epochs 4 \
+  --num_train_epochs 2 \
   --learning_rate 2e-5 \
   --warmup_ratio 0.05 \
   --save_steps 25 \
@@ -264,17 +263,23 @@ def build_training_example(
 
 
 def is_valid_training_example(example: Dict[str, Any]) -> bool:
-    """학습 가능한 예제인지 판정한다."""
-    return is_conversational_example(example)
-
-
-def is_conversational_example(example: Dict[str, Any]) -> bool:
-    """`messages`가 대화형 샘플 구조를 만족하는지 검사한다."""
+    """`messages`가 학습 가능한 대화형 샘플 구조를 만족하는지 검사한다."""
     msgs = example.get("messages")
     if not isinstance(msgs, list) or not msgs:
         return False
-    first = msgs[0]
-    return isinstance(first, dict) and "role" in first and "content" in first
+    has_assistant = False
+    for msg in msgs:
+        if not isinstance(msg, dict):
+            return False
+        role = msg.get("role")
+        content = msg.get("content")
+        if role not in {"system", "user", "assistant"}:
+            return False
+        if not isinstance(content, str) or not content.strip():
+            return False
+        if role == "assistant":
+            has_assistant = True
+    return has_assistant
 
 
 def debug_print_label_mask(trainer: SFTTrainer, tokenizer, max_rows: int = 220) -> None:
@@ -382,7 +387,27 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(args.model_name, use_fast=True, fix_mistral_regex=True)
+    # 일부 토크나이저는 fix_mistral_regex 패치 경로에서 pre_tokenizer 구조가 맞지 않아
+    # TypeError가 날 수 있으므로 안전하게 fallback한다.
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(
+            args.model_name,
+            use_fast=True,
+            fix_mistral_regex=True,
+        )
+    except TypeError as e:
+        if "pre_tokenizers.Split" not in str(e):
+            raise
+        print(
+            "[WARN] fix_mistral_regex=True patch failed for this tokenizer; "
+            "falling back to fix_mistral_regex=False.",
+            flush=True,
+        )
+        tokenizer = AutoTokenizer.from_pretrained(
+            args.model_name,
+            use_fast=True,
+            fix_mistral_regex=False,
+        )
     tokenizer.pad_token = tokenizer.eos_token
 
     # Force-load local chat template file when available.
@@ -472,7 +497,7 @@ def main():
     if dropped_train > 0:
         raise ValueError(
             f"Found {dropped_train} non-conversational samples in train split. "
-            "This trainer now requires conversational format only: "
+            "This trainer requires conversational format only: "
             "{'messages': [{'role': ..., 'content': ...}, ...]}."
         )
 
@@ -491,7 +516,7 @@ def main():
         if dropped_eval > 0:
             raise ValueError(
                 f"Found {dropped_eval} non-conversational samples in eval split. "
-                "This trainer now requires conversational format only: "
+                "This trainer requires conversational format only: "
                 "{'messages': [{'role': ..., 'content': ...}, ...]}."
             )
 

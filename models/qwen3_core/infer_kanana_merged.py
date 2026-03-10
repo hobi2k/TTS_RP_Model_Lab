@@ -7,7 +7,7 @@
 
 사용 예:
 uv run models/qwen3_core/infer_kanana_merged.py \
-  --model_dir models/qwen3_core/model_assets/kanana_3b \
+  --model_dir models/qwen3_core/model_assets/saya_vlm_3b_sft \
   --load_in_4bit \
   --trust_remote_code
 """
@@ -159,7 +159,6 @@ def generate_reply(
     )
 
     input_ids = batch["input_ids"]
-    prompt_len = input_ids.shape[-1]
 
     model_device = next(model.parameters()).device
     inputs = {}
@@ -188,20 +187,13 @@ def generate_reply(
 
     output = model.generate(**inputs, **gen_kwargs)
     out_ids = output[0]
-    # Kanana 커스텀 generate는
-    # 1) [prompt + generated] 전체를 주는 경우와
-    # 2) generated 토큰만 주는 경우가 모두 있을 수 있다.
-    # 항상 prompt_len을 슬라이스하면 (2)에서 빈 출력이 된다.
-    if out_ids.shape[-1] > prompt_len:
-        gen_ids = out_ids[prompt_len:]
-    else:
-        gen_ids = out_ids
+
     if tok is None:
         return ""
-    text = tok.decode(gen_ids, skip_special_tokens=True).strip()
+    text = tok.decode(out_ids, skip_special_tokens=True).strip()
     # 특수토큰 제거 후 빈 문자열이 되면 raw 디코드로 한 번 더 시도한다.
     if not text:
-        text = tok.decode(gen_ids, skip_special_tokens=False).strip()
+        text = tok.decode(out_ids, skip_special_tokens=False).strip()
     return text
 
 

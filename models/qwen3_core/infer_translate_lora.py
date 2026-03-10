@@ -156,7 +156,6 @@ def main() -> None:
 
     full_text = tokenizer.decode(out_ids[0], skip_special_tokens=False)
 
-    # 프롬프트 echo 제거: prompt 길이만큼 잘라내는 방식도 가능하지만,
     # 모델이 프롬프트를 약간 변형해서 재출력하는 경우를 대비해 marker 기반 추출을 우선한다.
     translated = extract_output_text(full_text)
 

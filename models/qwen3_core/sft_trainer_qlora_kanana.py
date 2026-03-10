@@ -32,6 +32,34 @@ uv run models/qwen3_core/sft_trainer_qlora_kanana.py \
   --assistant_only_loss \
   --text_only \
   --trust_remote_code
+
+PYTORCH_ALLOC_CONF=expandable_segments:True 
+uv run models/qwen3_core/sft_trainer_qlora_kanana.py \
+  --model_name models/qwen3_core/model_assets/kanana_3b \
+  --data_path /mnt/d/rp_data/rewrite/multiturn_rewrite_vlm.jsonl \
+  --output_dir models/qwen3_core/model_assets/kanana_3b_stage2 \
+  --init_adapter_path models/qwen3_core/model_assets/kanana_3b_stage1/lora_adapter \
+  --load_in_4bit \
+  --bf16 \
+  --max_length 2048 \
+  --per_device_train_batch_size 1 \
+  --gradient_accumulation_steps 16 \
+  --num_train_epochs 2 \
+  --learning_rate 2e-5 \
+  --warmup_ratio 0.05 \
+  --save_steps 25 \
+  --save_total_limit 6 \
+  --eval_split 0.02 \
+  --eval_strategy steps \
+  --eval_steps 25 \
+  --per_device_eval_batch_size 1 \
+  --eval_accumulation_steps 1 \
+  --prediction_loss_only \
+  --load_best_model_at_end \
+  --metric_for_best_model eval_loss \
+  --assistant_only_loss \
+  --text_only \
+  --trust_remote_code
 """
 
 from __future__ import annotations
@@ -413,9 +441,9 @@ def main() -> None:
         trust_remote_code=True,
     )
 
-    # Kanana 전용 스크립트는 gradient checkpointing을 사용하지 않는다.
+    # 학습 시 KV cache는 불필요하므로 비활성화해 메모리를 절약한다.
     if hasattr(model.config, "use_cache"):
-        model.config.use_cache = True
+        model.config.use_cache = False
 
     if args.load_in_4bit:
         # Kanana는 일부 입력-임베딩 경로 미구현 이슈가 있어 checkpointing hook은 사용하지 않는다.

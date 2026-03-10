@@ -9,9 +9,9 @@ uv run models/qwen3_core/merge.py \
   --trust_remote_code
 
 uv run models/qwen3_core/merge.py \
-  --base_model models/qwen3_core/model_assets/qwen3_4b_rp \
-  --adapter_path models/qwen3_core/model_assets/qwen3_4b_rp_grpo \
-  --output_dir models/qwen3_core/model_assets/saya_rp_4b \
+  --base_model models/qwen3_core/model_assets/rosetta_4b \
+  --adapter_path models/qwen3_core/model_assets/rosetta_4b_stage1/lora_adapter \
+  --output_dir models/qwen3_core/model_assets/rosetta_4b_merge1 \
   --dtype bf16 \
   --device_map auto \
   --safe_serialization \
