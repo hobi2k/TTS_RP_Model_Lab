@@ -152,7 +152,8 @@ uv run models/qwen3_core/sft_trainer_qlora.py \
   --prediction_loss_only \
   --load_best_model_at_end \
   --metric_for_best_model eval_loss \
-  --assistant_only_loss
+  --assistant_only_loss \
+  --resume_from_checkpoint models/qwen3_core/model_assets/rosetta_4b_stage2/checkpoint-25
 """
 
 

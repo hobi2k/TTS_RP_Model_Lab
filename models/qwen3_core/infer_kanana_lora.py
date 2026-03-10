@@ -284,8 +284,8 @@ def main() -> None:
     """CLI 엔트리포인트."""
     p = argparse.ArgumentParser()
     default_assets = Path(__file__).resolve().parent / "model_assets"
-    p.add_argument("--base_dir", type=str, default=str(default_assets / "kanana_3b"))
-    p.add_argument("--lora_dir", type=str, default=str(default_assets / "kanana_3b_stage2/lora_adapter"))
+    p.add_argument("--base_dir", type=str, default=str(default_assets / "saya_vlm_3b_sft"))
+    p.add_argument("--lora_dir", type=str, default=str(default_assets / "kanana_3b_grpo"))
     p.add_argument("--trust_remote_code", action="store_true", default=True)
     p.add_argument("--load_in_4bit", action="store_true")
     p.add_argument("--attn_implementation", type=str, default="flash_attention_2", choices=["flash_attention_2", "sdpa", "eager"])

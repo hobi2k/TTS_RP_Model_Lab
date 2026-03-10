@@ -56,7 +56,25 @@ def _resolve_tokenizer_source(base_model_dir: str, lora_dir: str) -> str:
 def load_model():
     """토크나이저, Base 모델, LoRA adapter를 순서대로 로드한다."""
     tokenizer_src = _resolve_tokenizer_source(BASE_MODEL, LORA_DIR)
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_src, use_fast=True)
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(
+            tokenizer_src,
+            use_fast=True,
+            fix_mistral_regex=True,
+        )
+    except TypeError as e:
+        if "pre_tokenizers.Split" not in str(e):
+            raise
+        print(
+            "[WARN] fix_mistral_regex=True 패치가 현재 토크나이저 구조와 맞지 않아 "
+            "fix_mistral_regex=False로 다시 로드합니다.",
+            flush=True,
+        )
+        tokenizer = AutoTokenizer.from_pretrained(
+            tokenizer_src,
+            use_fast=True,
+            fix_mistral_regex=False,
+        )
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 

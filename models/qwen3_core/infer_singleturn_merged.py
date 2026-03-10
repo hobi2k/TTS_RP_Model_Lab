@@ -10,23 +10,50 @@ from __future__ import annotations
 from pathlib import Path
 
 import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
-from peft import PeftModel
+from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig, PreTrainedTokenizerFast
 
 # 경로
 MODEL_ASSETS_DIR = Path(__file__).resolve().parent / "model_assets"
-BASE_MODEL = str(MODEL_ASSETS_DIR / "rosetta_4b")
-LORA_DIR = str(MODEL_ASSETS_DIR / "qwen3_4b_rp_grpo")
-TOKENIZER = str(MODEL_ASSETS_DIR / "qwen3_4b_rp_grpo")
+BASE_MODEL = str(MODEL_ASSETS_DIR / "saya_rp_4b_v3")
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 DTYPE = torch.bfloat16
 
 
+def _load_tokenizer():
+    """토크나이저를 로드한다.
+
+    일부 Gemma 계열 병합 모델은 현재 설치된 transformers/tokenizers 조합에서
+    `AutoTokenizer` 또는 `GemmaTokenizer` 로딩이 비정상 동작할 수 있다.
+    그 경우 `tokenizer.json`을 직접 읽는 fast tokenizer로 안전하게 우회한다.
+    """
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(
+            BASE_MODEL,
+            use_fast=False,
+            trust_remote_code=True,
+        )
+        if isinstance(tokenizer, bool):
+            raise TypeError("AutoTokenizer returned bool instead of tokenizer instance")
+        return tokenizer
+    except Exception:
+        tokenizer = PreTrainedTokenizerFast(
+            tokenizer_file=str(Path(BASE_MODEL) / "tokenizer.json"),
+            bos_token="<bos>",
+            eos_token="<eos>",
+            unk_token="<unk>",
+            pad_token="<pad>",
+        )
+        chat_template_path = Path(BASE_MODEL) / "chat_template.jinja"
+        if chat_template_path.exists():
+            tokenizer.chat_template = chat_template_path.read_text(encoding="utf-8")
+        return tokenizer
+
+
 # 로드
 def load_model():
     """토크나이저와 4bit 양자화 모델을 로드한다."""
-    tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL, use_fast=True, fix_mistral_regex=True)
+    tokenizer = _load_tokenizer()
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
@@ -43,14 +70,10 @@ def load_model():
         torch_dtype=DTYPE,
         quantization_config=quant_config,
         attn_implementation="sdpa",
+        trust_remote_code=True,
     )
 
     model = base_model
-    # model = PeftModel.from_pretrained(
-    #     base_model,
-    #     LORA_DIR,
-    #     torch_dtype=DTYPE,
-    # )
 
     model.eval()
     return tokenizer, model
@@ -83,6 +106,8 @@ def generate_reply(
         prompt,
         return_tensors="pt",
     ).to(model.device)
+    # Gemma 계열 generate는 token_type_ids를 사용하지 않아 전달 시 오류가 난다.
+    inputs.pop("token_type_ids", None)
 
     gen_kwargs = dict(
         max_new_tokens=max_new_tokens,
