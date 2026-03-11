@@ -8,6 +8,8 @@
   uv run initialize.py
   uv run initialize.py --only runtime_llm_4b_v3
   uv run initialize.py --only runtime_llm_4b_v3_sft
+  uv run initialize.py --only runtime_vlm_3b
+  uv run initialize.py --only runtime_vlm_3b_sft
   uv run initialize.py --only tts_saya_v2
   uv run initialize.py --force
 """
@@ -100,6 +102,18 @@ SPECS: dict[str, ModelSpec] = {
         local_dir=QWEN_ASSETS_DIR / "saya_rp_4b_v3_sft",
         description="4B RP SFT 체크포인트(v3)",
     ),
+    "runtime_vlm_3b": ModelSpec(
+        key="runtime_vlm_3b",
+        repo_id="ahnhs2k/saya_vlm_3b",
+        local_dir=QWEN_ASSETS_DIR / "saya_vlm_3b",
+        description="현재 3B VLM RP 런타임 모델",
+    ),
+    "runtime_vlm_3b_sft": ModelSpec(
+        key="runtime_vlm_3b_sft",
+        repo_id="ahnhs2k/saya_vlm_3b_sft",
+        local_dir=QWEN_ASSETS_DIR / "saya_vlm_3b_sft",
+        description="3B VLM RP SFT 체크포인트",
+    ),
     "runtime_translator_v2": ModelSpec(
         key="runtime_translator_v2",
         repo_id="ahnhs2k/qtranslator_1.7b_v2",
@@ -143,6 +157,8 @@ DEFAULT_TARGETS = [
     "base_translator_1_7b",
     "runtime_llm_4b_v3",
     "runtime_llm_4b_v3_sft",
+    "runtime_vlm_3b",
+    "runtime_vlm_3b_sft",
     "runtime_translator_v2",
     "tts_saya_v2",
     "tts_mai_v2",

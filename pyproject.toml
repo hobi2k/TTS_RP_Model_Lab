@@ -11,7 +11,9 @@ dependencies = [
     "python-dotenv",
 
     # ===== LLM / data =====
-    "transformers>=4.40",
+    "transformers>=5.3.0,<6",
+    # vllm 런타임을 다시 붙일 때는 현재 upstream 제약에 맞춰
+    # transformers>=4.56.0,<5 범위로 별도 환경을 분리해야 한다.
     "accelerate>=0.27",
     "peft",
     "safetensors>=0.4",
@@ -80,7 +82,6 @@ dependencies = [
     "prometheus-fastapi-instrumentator==7.1.0",
     "ray==2.53.0; sys_platform == 'linux'",
     "uvloop==0.22.1; sys_platform != 'win32'",
-    "vllm==0.14.0; sys_platform == 'linux'",
     "watchfiles==1.1.1",
     "sqlalchemy==2.0.45",
 ]
@@ -93,5 +94,19 @@ torch = [
     "torchaudio==2.9.1",
 ]
 
+# vllm-runtime = [
+#     "vllm; sys_platform == 'linux'",
+#     # vllm이 요구하는 transformers 범위:
+#     # "transformers>=4.56.0,<5",
+# ]
+
 [tool.uv]
 reinstall = false
+
+# [tool.uv.sources]
+# vllm = { index = "vllm-nightly" }
+
+# [[tool.uv.index]]
+# name = "vllm-nightly"
+# url = "https://wheels.vllm.ai/nightly"
+# explicit = true
