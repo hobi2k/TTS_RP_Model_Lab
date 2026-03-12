@@ -10,6 +10,7 @@
 - `system/utils/*.py`
 - `system/webapi/*`
 - `system/webapi_vlm/*`
+- `system/webapi_tooluse/*`
 
 제외:
 - `__pycache__`
@@ -28,7 +29,7 @@
 3. 장기 기억(memory chain)과 단기 history를 관리하는 상태 계층 제공
 4. FastAPI + Gradio 데모 형태로 외부에 API/UI를 노출
 
-현재 구조는 두 개의 런타임 경로로 나뉜다.
+현재 구조는 세 개의 런타임 경로로 나뉜다.
 
 - `webapi`
   - Qwen 계열 텍스트 RP 경로
@@ -44,6 +45,13 @@
   - SummaryMemoryChain 사용
   - 이미지 입력 지원
   - 현재는 Hugging Face `AutoModelForVision2Seq` 경로 사용, vLLM은 사용하지 않음
+
+- `webapi_tooluse`
+  - tool-use 전용 경로
+  - `QwenEngine`를 planner/composer로 사용
+  - `KananaVLMEngine`를 `image_analyze` 도구로 사용
+  - `memory_lookup`, `recent_history_lookup`, `image_analyze` 도구 제공
+  - LangGraph 기반 도구 계획/실행/응답 합성 경로
 
 ---
 
@@ -72,6 +80,8 @@
   - Qwen 텍스트 경로용 LangGraph 턴 파이프라인
 - `vlm_langgraph_pipeline.py`
   - VLM 경로용 LangGraph 턴 파이프라인
+- `tool_use_pipeline.py`
+  - tool-use 경로용 LangGraph 턴 파이프라인
 
 ### 2.3 유틸리티
 
@@ -84,6 +94,8 @@
   - Qwen 텍스트 경로용 REST API + Gradio UI
 - `webapi_vlm/`
   - VLM 경로용 REST API + Gradio UI
+- `webapi_tooluse/`
+  - tool-use 전용 REST API
 
 ---
 
@@ -435,7 +447,42 @@ RP 생성 단계의 핵심 규칙:
 
 ---
 
-## 4.10 `utils/text_split.py`
+## 4.10 `tool_use_pipeline.py`
+
+### 목적
+
+고정 파이프라인이 아니라 planner가 필요한 도구를 선택하고, 그 결과를 근거로 최종 RP 응답을 다시 생성하는 tool-use 경로를 제공한다.
+
+### 현재 도구 목록
+
+- `memory_lookup`
+  - 장기기억 슬롯과 최근 대화 스냅샷 조회
+- `recent_history_lookup`
+  - 직전 user/assistant 문면 재확인
+- `image_analyze`
+  - 현재 턴 이미지의 시각 정보와 OCR 추출
+
+### 현재 그래프 구조
+
+1. `plan_tools`
+2. 조건 분기
+3. `execute_tools`
+4. `compose`
+5. `translate`
+6. `emotion`
+7. `tts`
+8. `commit`
+
+### 구현 포인트
+
+- planner는 JSON 형태의 tool call 목록을 만든다.
+- tool 결과는 `tool_trace`와 `tool_context`에 기록된다.
+- composer는 기본 RP system prompt 위에 tool 결과를 system message로 주입한다.
+- `memory_lookup`는 자동 주입이 아니라 도구 호출을 통해 선택적으로 사용된다.
+
+---
+
+## 4.11 `utils/text_split.py`
 
 ### 목적
 
@@ -499,6 +546,33 @@ Kanana 기반 VLM RP 데모 전용 API/UI다.
 - SummaryMemoryChain 사용
 - 번역/TTS/감정 판정 통합
 - 현재 vLLM 미사용
+
+---
+
+## 6.1 `webapi_tooluse` 폴더 설명
+
+### 구성
+
+- `app.py`
+  - tool-use 전용 FastAPI 진입점
+- `schemas.py`
+  - planner/turn 요청·응답 스키마
+- `services.py`
+  - tool-use RuntimeServices
+- `api_architecture.md`
+  - tool-use API 구조 문서
+
+### 현재 역할
+
+도구 선택형 RP 대화 서버다.
+
+### 특징
+
+- `/api/tool-plan`으로 planner 결과를 따로 확인 가능
+- `/api/turn`, `/api/main-loop`는 tool-use 메인 턴 실행
+- `QwenEngine`는 planner/composer 역할
+- `KananaVLMEngine`는 `image_analyze` tool 역할
+- 현재 환경에서는 `LLM_BACKEND=hf`, `LLM_STRICT_VLLM=0` 기본값으로 맞춰 `vllm` 미설치 상태에서도 import/실행 가능
 
 ---
 

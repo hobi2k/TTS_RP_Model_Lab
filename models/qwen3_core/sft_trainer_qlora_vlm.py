@@ -32,6 +32,33 @@ uv run models/qwen3_core/sft_trainer_qlora_vlm.py \
   --metric_for_best_model eval_loss \
   --assistant_only_loss \
   --trust_remote_code
+
+uv run models/qwen3_core/sft_trainer_qlora_vlm.py \
+  --model_name models/qwen3_core/model_assets/qwen3.5-4b \
+  --data_path /mnt/d/rp_data/rewrite/multiturn_rewrite.jsonl \
+  --output_dir models/qwen3_core/model_assets/qwen3.5-4b_stage2 \
+  --init_adapter_path models/qwen3_core/model_assets/qwen3.5-4b_stage1/lora_adapter \
+  --load_in_4bit \
+  --bf16 \
+  --gradient_checkpointing \
+  --max_length 4096 \
+  --per_device_train_batch_size 1 \
+  --gradient_accumulation_steps 16 \
+  --num_train_epochs 2 \
+  --learning_rate 2e-5 \
+  --warmup_ratio 0.05 \
+  --save_steps 25 \
+  --save_total_limit 6 \
+  --eval_split 0.02 \
+  --eval_strategy steps \
+  --eval_steps 25 \
+  --per_device_eval_batch_size 1 \
+  --eval_accumulation_steps 1 \
+  --prediction_loss_only \
+  --load_best_model_at_end \
+  --metric_for_best_model eval_loss \
+  --assistant_only_loss \
+  --trust_remote_code
 """
 
 from __future__ import annotations

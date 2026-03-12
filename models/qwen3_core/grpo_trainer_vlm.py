@@ -4,6 +4,28 @@
 - Hugging Face Qwen3.5-4B 카드의 VLM 로더 패턴을 따른다.
 - qwen3_core의 기존 GRPO 보상 함수를 재사용한다.
 - 텍스트 RP 데이터로도 VLM 경로를 실험할 수 있게 더미 이미지를 기본 입력으로 사용한다.
+
+PYTORCH_ALLOC_CONF=expandable_segments:True \
+uv run models/qwen3_core/grpo_trainer_vlm.py \
+  --model_name models/qwen3_core/model_assets/qwen3.5-4b_sft \
+  --train_data /mnt/d/rp_data/grpo/grpo4_train.jsonl \
+  --eval_data /mnt/d/rp_data/grpo/grpo4_eval.jsonl \
+  --output_dir models/qwen3_core/model_assets/qwen3.5-4b_grpo \
+  --per_device_train_batch_size 1 \
+  --per_device_eval_batch_size 2 \
+  --gradient_accumulation_steps 16 \
+  --num_train_epochs 2 \
+  --learning_rate 1e-6 \
+  --max_prompt_length 1048 \
+  --num_generations 2 \
+  --temperature 0.7 \
+  --load_in_4bit \
+  --top_p 0.9 \
+  --top_k 40 \
+  --use_lora \
+  --load_in_4bit \
+  --bf16 \
+  --trust_remote_code \
 """
 
 from __future__ import annotations
@@ -11,6 +33,10 @@ from __future__ import annotations
 import argparse
 import inspect
 import re
+import sys
+import types
+from contextlib import nullcontext
+from importlib.machinery import ModuleSpec
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -19,6 +45,7 @@ from datasets import Dataset, load_dataset
 from PIL import Image
 from peft import LoraConfig, prepare_model_for_kbit_training
 from transformers import AutoProcessor, BitsAndBytesConfig, ProcessorMixin
+
 from trl import GRPOConfig, GRPOTrainer
 
 try:
@@ -222,6 +249,7 @@ class QwenVLMGRPOProcessor(ProcessorMixin):
         self.dummy_image_size = dummy_image_size
         if self.tokenizer is None:
             raise ValueError("processor에 tokenizer가 없습니다.")
+        self.tokenizer.padding_side = "left"
         if self.tokenizer.pad_token_id is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
@@ -248,7 +276,7 @@ class QwenVLMGRPOProcessor(ProcessorMixin):
 
         prompts: list[str] = []
         image_batch: list[Image.Image] = []
-        has_any_image = True
+        has_any_image = False
         if images is None:
             images = [None] * len(texts)
         elif not isinstance(images, list):
@@ -258,14 +286,19 @@ class QwenVLMGRPOProcessor(ProcessorMixin):
             images.append(None)
 
         for text, image in zip(texts, images, strict=True):
-            pil_image = image if isinstance(image, Image.Image) else self._dummy_image()
+            if isinstance(image, list):
+                image = image[0] if image else None
+            has_image = isinstance(image, Image.Image)
+            pil_image = image if has_image else None
             prompt = self.base_processor.apply_chat_template(
-                self._to_conv(str(text), has_image=True),
+                self._to_conv(str(text), has_image=has_image),
                 tokenize=False,
                 add_generation_prompt=True,
             )
             prompts.append(prompt)
-            image_batch.append(pil_image)
+            if pil_image is not None:
+                image_batch.append(pil_image)
+                has_any_image = True
 
         return self.base_processor(
             text=prompts,
@@ -318,6 +351,33 @@ class QwenVLMGRPOProcessor(ProcessorMixin):
         return self.tokenizer.eos_token_id
 
 
+def _clear_qwen3_5_rope_deltas(model: Any) -> None:
+    """텍스트 전용 forward 전에는 Qwen3.5 VLM의 stale rope_deltas를 비운다."""
+    candidates = [model]
+    seen: set[int] = set()
+    while candidates:
+        current = candidates.pop()
+        if current is None or id(current) in seen:
+            continue
+        seen.add(id(current))
+        if hasattr(current, "rope_deltas"):
+            current.rope_deltas = None
+        for attr in ("model", "base_model"):
+            if hasattr(current, attr):
+                candidates.append(getattr(current, attr))
+
+
+class QwenVLMGRPOTrainer(GRPOTrainer):
+    """Qwen3.5 VLM의 multimodal rope 상태를 정리하는 GRPOTrainer 래퍼."""
+
+    def _get_per_token_logps_and_entropies(self, *args: Any, **kwargs: Any):
+        if kwargs.get("pixel_values") is None and kwargs.get("image_grid_thw") is None:
+            _clear_qwen3_5_rope_deltas(self.accelerator.unwrap_model(self.model))
+            if self.ref_model is not None:
+                _clear_qwen3_5_rope_deltas(self.accelerator.unwrap_model(self.ref_model))
+        return super()._get_per_token_logps_and_entropies(*args, **kwargs)
+
+
 def load_grpo_dataset(path: str) -> Dataset:
     """GRPO 데이터셋을 로드하고 prompt/reference/image 컬럼으로 정규화한다."""
     ds = load_dataset("json", data_files=path)["train"]
@@ -366,7 +426,14 @@ def load_grpo_dataset(path: str) -> Dataset:
 
         prompt = _trim_to_last_user_turn(prompt)
         reference = _as_text(ex.get("reference", ex.get("output", ""))).strip()
-        return {"prompt": prompt, "reference": reference, "image": "__dummy__"}
+        image_value = ex.get("image")
+        if isinstance(image_value, list):
+            image_value = [x for x in image_value if isinstance(x, str) and x.strip()]
+        elif isinstance(image_value, str) and image_value.strip():
+            image_value = [image_value.strip()]
+        else:
+            image_value = []
+        return {"prompt": prompt, "reference": reference, "image": image_value}
 
     ds = ds.map(_map, remove_columns=ds.column_names)
     ds = ds.filter(
@@ -379,6 +446,10 @@ def load_grpo_dataset(path: str) -> Dataset:
     )
     if len(ds) == 0:
         raise ValueError(f"No valid GRPO samples from: {path}")
+    # TRL은 `image` 컬럼이 존재하기만 하면 멀티모달 경로를 타므로,
+    # 전체 샘플이 텍스트 전용이면 컬럼 자체를 제거해야 Qwen3.5 VLM text-only 경로로 간다.
+    if "image" in ds.column_names and all(not ex for ex in ds["image"]):
+        ds = ds.remove_columns(["image"])
     return ds
 
 
@@ -521,7 +592,7 @@ def main() -> None:
     valid_grpo = inspect.signature(GRPOConfig.__init__).parameters
     grpo_config = GRPOConfig(**{k: v for k, v in grpo_kwargs.items() if k in valid_grpo and v is not None})
 
-    trainer = GRPOTrainer(
+    trainer = QwenVLMGRPOTrainer(
         model=model,
         args=grpo_config,
         reward_funcs=[

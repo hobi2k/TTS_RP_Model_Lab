@@ -21,7 +21,11 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from peft import PeftModel
 
 os.environ.setdefault("VLLM_WORKER_MULTIPROC_METHOD", "spawn")
-from vllm import LLM, SamplingParams
+try:
+    from vllm import LLM, SamplingParams
+except Exception:
+    LLM = None
+    SamplingParams = None
 
 @dataclass
 class GenerationConfig:
@@ -80,18 +84,25 @@ class QwenEngine:
         strict_vllm = os.getenv("LLM_STRICT_VLLM", "1") == "1"
 
         if prefer_vllm:
-            try:
-                self._init_vllm()
-                self.backend = "vllm"
-                return
-            except Exception as e:
+            if LLM is None or SamplingParams is None:
                 if strict_vllm:
                     raise RuntimeError(
-                        "vLLM init failed and strict mode is enabled. "
-                        "Tune VLLM_MAX_MODEL_LEN/VLLM_GPU_MEMORY_UTILIZATION and retry. "
-                        f"Root cause: {e}"
-                    ) from e
-                print(f"[llm_engine] vLLM init failed, fallback to transformers+bnb: {e}")
+                        "vLLM is not installed but LLM_BACKEND=vllm and strict mode is enabled."
+                    )
+                print("[llm_engine] vLLM is unavailable, fallback to transformers+bnb")
+            else:
+                try:
+                    self._init_vllm()
+                    self.backend = "vllm"
+                    return
+                except Exception as e:
+                    if strict_vllm:
+                        raise RuntimeError(
+                            "vLLM init failed and strict mode is enabled. "
+                            "Tune VLLM_MAX_MODEL_LEN/VLLM_GPU_MEMORY_UTILIZATION and retry. "
+                            f"Root cause: {e}"
+                        ) from e
+                    print(f"[llm_engine] vLLM init failed, fallback to transformers+bnb: {e}")
 
         self._init_hf_with_bnb(dtype=dtype, device_map=device_map, lora_model_id=lora_model_id)
         self.backend = "hf"
@@ -301,3 +312,11 @@ class QwenEngine:
         if self.backend == "vllm" and self._vllm_engine is not None:
             return self._generate_vllm(prompt, cfg)
         return self._generate_hf(prompt, cfg)
+
+    def generate_from_messages(
+        self,
+        messages: List[dict],
+        gen_config: Optional[GenerationConfig] = None,
+    ) -> str:
+        """메시지 배열을 assistant 텍스트로 직접 생성한다."""
+        return self.generate(self.build_prompt(messages), gen_config=gen_config)

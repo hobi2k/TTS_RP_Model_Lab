@@ -3,8 +3,8 @@
 예시:
 uv run models/qwen3_core/merge_vlm.py \
   --base_model models/qwen3_core/model_assets/qwen3.5-4b \
-  --adapter_path models/qwen3_core/model_assets/qwen3.5-4b_stage1/lora_adapter \
-  --output_dir models/qwen3_core/model_assets/qwen3.5-4b_merged \
+  --adapter_path models/qwen3_core/model_assets/qwen3.5-4b_stage2/lora_adapter \
+  --output_dir models/qwen3_core/model_assets/qwen3.5-4b_sft \
   --dtype bf16 \
   --device_map auto \
   --safe_serialization \
