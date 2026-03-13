@@ -16,8 +16,8 @@ from peft import PeftModel
 
 # 경로
 MODEL_ASSETS_DIR = Path(__file__).resolve().parent / "model_assets"
-BASE_MODEL = str(MODEL_ASSETS_DIR / "rosetta_4b")  # .../model_assets/rosetta_4b
-LORA_DIR = str(MODEL_ASSETS_DIR / "rosetta_4b_stage1/lora_adapter")
+BASE_MODEL = str(MODEL_ASSETS_DIR / "qwen3-4b")  # .../model_assets/qwen3-4b
+LORA_DIR = str(MODEL_ASSETS_DIR / "qwen3_4b_stage2/lora_adapter")
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 DTYPE = torch.bfloat16
@@ -60,7 +60,6 @@ def load_model():
         tokenizer = AutoTokenizer.from_pretrained(
             tokenizer_src,
             use_fast=True,
-            fix_mistral_regex=True,
         )
     except TypeError as e:
         if "pre_tokenizers.Split" not in str(e):

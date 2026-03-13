@@ -82,19 +82,19 @@ uv run models/qwen3_core/grpo_trainer.py \
   --debug_log_num_samples 2
 
 PYTORCH_ALLOC_CONF=expandable_segments:True \
-uv run models/qwen3_core/grpo_trainer.py \
-  --model_name models/qwen3_core/model_assets/saya_rp_7b_v2_sft \
+uv run models/qwen3_core/grpo_trainer_old.py \
+  --model_name models/qwen3_core/model_assets/qwen3_4b_sft \
   --train_data /mnt/d/rp_data/grpo/grpo3_train.jsonl \
   --eval_data /mnt/d/rp_data/grpo/grpo3_eval.jsonl \
-  --output_dir models/qwen3_core/model_assets/saya_rp_7b_v2_grpo \
+  --output_dir models/qwen3_core/model_assets/qwen3_4b_grpo \
   --per_device_train_batch_size 1 \
-  --per_device_eval_batch_size 2 \
+  --per_device_eval_batch_size 4 \
   --gradient_accumulation_steps 16 \
-  --num_train_epochs 3 \
+  --num_train_epochs 2 \
   --learning_rate 2e-6 \
   --max_prompt_length 768 \
   --max_completion_length 200 \
-  --num_generations 2
+  --num_generations 4 \
   --use_lora \
   --load_in_4bit \
   --bnb_4bit_quant_type nf4 \
@@ -939,7 +939,6 @@ def main() -> None:
     tokenizer = AutoTokenizer.from_pretrained(
         args.model_name,
         use_fast=True,
-        fix_mistral_regex=True,
     )
     # 디코더 전용 모델의 배치 생성 안정성을 위해 좌측 패딩을 사용한다.
     tokenizer.padding_side = "left"

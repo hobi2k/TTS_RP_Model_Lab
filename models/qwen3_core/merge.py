@@ -18,9 +18,9 @@ uv run models/qwen3_core/merge.py \
   --trust_remote_code
 
 uv run models/qwen3_core/merge.py \
-  --base_model models/qwen3_core/model_assets/qwen3-1.7b-base \
-  --adapter_path models/qwen3_core/model_assets/qwen3_1.7_ko2ja_lora/lora_adapter \
-  --output_dir models/qwen3_core/model_assets/qtranslator_1.7b_v2 \
+  --base_model models/qwen3_core/model_assets/qwen3-4b \
+  --adapter_path models/qwen3_core/model_assets/qwen3_4b_stage2/lora_adapter \
+  --output_dir models/qwen3_core/model_assets/qwen3_4b_sft \
   --dtype bf16 \
   --device_map auto \
   --safe_serialization \

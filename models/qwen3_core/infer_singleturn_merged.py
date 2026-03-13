@@ -14,7 +14,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 
 # 경로
 MODEL_ASSETS_DIR = Path(__file__).resolve().parent / "model_assets"
-BASE_MODEL = str(MODEL_ASSETS_DIR / "saya_rp_4b_v3")
+BASE_MODEL = str(MODEL_ASSETS_DIR / "qwen3_4b_sft")
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 DTYPE = torch.bfloat16

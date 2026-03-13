@@ -25,9 +25,9 @@ uv run models/qwen3_core/sft_trainer_qlora.py ...다음옵션...
 # Stage 1) 싱글턴 데이터로 1차 LoRA 학습
 while kill -0 1986824 2>/dev/null; do sleep 30; done
 uv run models/qwen3_core/sft_trainer_qlora.py \
-  --model_name models/qwen3_core/model_assets/kanana_3b \
-  --data_path /mnt/d/rp_data/singleturn/rp_singleturn_cleaned.jsonl \
-  --output_dir models/qwen3_core/model_assets/kanana_3b_stage1 \
+  --model_name models/qwen3_core/model_assets/qwen3-4b \
+  --data_path /mnt/d/rp_data/rewrite/singleturn_rewrite.jsonl \
+  --output_dir models/qwen3_core/model_assets/qwen3_4b_stage1 \
   --load_in_4bit \
   --bf16 \
   --gradient_checkpointing \
@@ -128,11 +128,12 @@ uv run models/qwen3_core/sft_trainer_qlora.py \
   --metric_for_best_model eval_loss \
   --assistant_only_loss
 
-while kill -0 37592 2>/dev/null; do sleep 30; done
+while kill -0 902378 2>/dev/null; do sleep 30; done
 uv run models/qwen3_core/sft_trainer_qlora.py \
-  --model_name models/qwen3_core/model_assets/rosetta_4b_merge1 \
+  --model_name models/qwen3_core/model_assets/qwen3-4b \
   --data_path /mnt/d/rp_data/rewrite/multiturn_rewrite.jsonl \
-  --output_dir models/qwen3_core/model_assets/rosetta_4b_stage2 \
+  --output_dir models/qwen3_core/model_assets/qwen3_4b_stage2 \
+  --init_adapter_path models/qwen3_core/model_assets/qwen3_4b_stage1/lora_adapter \
   --load_in_4bit \
   --bf16 \
   --gradient_checkpointing \
@@ -153,7 +154,7 @@ uv run models/qwen3_core/sft_trainer_qlora.py \
   --load_best_model_at_end \
   --metric_for_best_model eval_loss \
   --assistant_only_loss \
-  --resume_from_checkpoint models/qwen3_core/model_assets/rosetta_4b_stage2/checkpoint-25
+  --resume_from_checkpoint models/qwen3_core/model_assets/qwen3_4b_stage2/checkpoint-25
 """
 
 
@@ -394,7 +395,6 @@ def main():
         tokenizer = AutoTokenizer.from_pretrained(
             args.model_name,
             use_fast=True,
-            fix_mistral_regex=True,
         )
     except TypeError as e:
         if "pre_tokenizers.Split" not in str(e):
