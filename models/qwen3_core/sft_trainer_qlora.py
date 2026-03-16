@@ -23,7 +23,7 @@ uv run models/qwen3_core/sft_trainer_qlora.py ...다음옵션...
 
 
 # Stage 1) 싱글턴 데이터로 1차 LoRA 학습
-while kill -0 1986824 2>/dev/null; do sleep 30; done
+while kill -0 1278436 2>/dev/null; do sleep 30; done
 uv run models/qwen3_core/sft_trainer_qlora.py \
   --model_name models/qwen3_core/model_assets/qwen3-4b \
   --data_path /mnt/d/rp_data/rewrite/singleturn_rewrite.jsonl \

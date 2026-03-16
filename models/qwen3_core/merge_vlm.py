@@ -2,9 +2,9 @@
 
 예시:
 uv run models/qwen3_core/merge_vlm.py \
-  --base_model models/qwen3_core/model_assets/qwen3.5-4b \
-  --adapter_path models/qwen3_core/model_assets/qwen3.5-4b_stage2/lora_adapter \
-  --output_dir models/qwen3_core/model_assets/qwen3.5-4b_sft \
+  --base_model models/qwen3_core/model_assets/qwen3.5-4b_sft \
+  --adapter_path models/qwen3_core/model_assets/qwen3.5-4b_grpo \
+  --output_dir models/qwen3_core/model_assets/saya_vlm_4b \
   --dtype bf16 \
   --device_map auto \
   --safe_serialization \

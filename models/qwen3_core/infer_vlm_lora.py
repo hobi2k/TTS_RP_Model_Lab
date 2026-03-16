@@ -28,8 +28,8 @@ except ImportError:  # pragma: no cover
 
 
 MODEL_ASSETS_DIR = Path(__file__).resolve().parent / "model_assets"
-DEFAULT_BASE_DIR = MODEL_ASSETS_DIR / "qwen3.5-4b"
-DEFAULT_LORA_DIR = MODEL_ASSETS_DIR / "qwen3.5-4b_stage2" / "lora_adapter"
+DEFAULT_BASE_DIR = MODEL_ASSETS_DIR / "qwen3.5-4b_sft"
+DEFAULT_LORA_DIR = MODEL_ASSETS_DIR / "qwen3.5-4b_grpo"
 
 
 def _has_any_file(dir_path: Path, candidates: list[str]) -> bool:

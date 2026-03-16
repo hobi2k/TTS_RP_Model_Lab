@@ -5,6 +5,7 @@
 - qwen3_core의 기존 GRPO 보상 함수를 재사용한다.
 - 텍스트 RP 데이터로도 VLM 경로를 실험할 수 있게 더미 이미지를 기본 입력으로 사용한다.
 
+while kill -0 1278436 2>/dev/null; do sleep 30; done
 PYTORCH_ALLOC_CONF=expandable_segments:True \
 uv run models/qwen3_core/grpo_trainer_vlm.py \
   --model_name models/qwen3_core/model_assets/qwen3.5-4b_sft \
@@ -14,7 +15,7 @@ uv run models/qwen3_core/grpo_trainer_vlm.py \
   --per_device_train_batch_size 1 \
   --per_device_eval_batch_size 2 \
   --gradient_accumulation_steps 16 \
-  --num_train_epochs 2 \
+  --num_train_epochs 1 \
   --learning_rate 1e-6 \
   --max_prompt_length 1048 \
   --num_generations 2 \

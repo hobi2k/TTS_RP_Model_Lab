@@ -37,7 +37,8 @@ MODELS = {
     # "YanoljaNEXT-EEVE-7B-v2": "yanolja/YanoljaNEXT-EEVE-Instruct-7B-v2-Preview",
     # "rosetta_4b": "yanolja/YanoljaNEXT-Rosetta-4B",
     # "kanana_3b": "kakaocorp/kanana-1.5-v-3b-instruct"
-    "qwen3.5-4b": "Qwen/Qwen3.5-4B"
+    # "qwen3.5-4b": "Qwen/Qwen3.5-4B",
+    "qwen3-4b-thinking": "Qwen/Qwen3-4B-Thinking-2507"
 }
 
 

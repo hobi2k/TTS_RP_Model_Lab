@@ -16,8 +16,8 @@ from peft import PeftModel
 
 # 경로
 MODEL_ASSETS_DIR = Path(__file__).resolve().parent / "model_assets"
-BASE_MODEL = str(MODEL_ASSETS_DIR / "qwen3-4b")  # .../model_assets/qwen3-4b
-LORA_DIR = str(MODEL_ASSETS_DIR / "qwen3_4b_stage2/lora_adapter")
+BASE_MODEL = str(MODEL_ASSETS_DIR / "qwen3_4b_sft")  # .../model_assets/qwen3-4b
+LORA_DIR = str(MODEL_ASSETS_DIR / "qwen3_4b_grpo")
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 DTYPE = torch.bfloat16
